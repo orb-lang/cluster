@@ -102,3 +102,17 @@ and out of bare necessity of discovery, I barely understand how it works now,
 let alone once there is code in this repository\.
 
 
+### Molds
+
+  The question we're trying to answer with types, is what sorts of behaviors
+and data a given object might contain or display\.
+
+In hoon, everyone's favorite acid trip, the mold is one of the ways of
+grappling with this reality\.
+
+For our purposes, a mold is a way of constraining the rvalue of a given lvalue\.
+This returns either the value, which in the general case is an Any, or
+`nil, condition`\.  We'll talk about what conditions are and imply later, it's
+a form of error, mostly\.
+
+
