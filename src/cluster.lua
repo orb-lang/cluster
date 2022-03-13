@@ -411,15 +411,28 @@ end
 
 local function genus(family)
    local seed, tape, meta = register({}, {}, {})
+   meta.__meta = {}
    if not family then
-     -- set em up fresh
-     setmetatable(seed, {__index = tape})
-     meta.__index = tape
-     meta.__meta = {}
-     meta.__meta.__seed = seed
+      -- set em up fresh
+      setmetatable(seed, {__index = tape})
    else
-     error "can't extend a genus yet, check back later"
+      assert(is_seed[family], "provide constructor to extend genus")
+      local _M = seed_meta[family]
+      setmetatable(tape, _M)
+      for k, v in pairs(_M) do
+         -- except __meta!
+         if (not k == '__meta') then
+            meta[k] = v
+         else
+            for _, __ in pairs(v) do
+              meta.__meta[_] = __
+            end
+         end
+      end
+      meta.__meta.meta = _M -- ... maybe? probably.
    end
+   meta.__index = tape
+   meta.__meta.seed = seed
    return seed, tape, meta
 end
 
@@ -463,6 +476,10 @@ local function construct(seed, builder)
 end
 
 cluster.construct = construct
+
+
+
+
 
 
 

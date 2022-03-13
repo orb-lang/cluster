@@ -411,15 +411,28 @@ interface.
 #!lua
 local function genus(family)
    local seed, tape, meta = register({}, {}, {})
+   meta.__meta = {}
    if not family then
-     -- set em up fresh
-     setmetatable(seed, {__index = tape})
-     meta.__index = tape
-     meta.__meta = {}
-     meta.__meta.__seed = seed
+      -- set em up fresh
+      setmetatable(seed, {__index = tape})
    else
-     error "can't extend a genus yet, check back later"
+      assert(is_seed[family], "provide constructor to extend genus")
+      local _M = seed_meta[family]
+      setmetatable(tape, _M)
+      for k, v in pairs(_M) do
+         -- except __meta!
+         if (not k == '__meta') then
+            meta[k] = v
+         else
+            for _, __ in pairs(v) do
+              meta.__meta[_] = __
+            end
+         end
+      end
+      meta.__meta.meta = _M -- ... maybe? probably.
    end
+   meta.__index = tape
+   meta.__meta.seed = seed
    return seed, tape, meta
 end
 
@@ -465,6 +478,10 @@ end
 cluster.construct = construct
 #/lua
 
+Here we see how using a local library of weak references can mitigate the
+complexity of having three tables floating around.  We don't need to hand
+back the metatable when adding the constructor, which is just an opportunity
+to pass the cassette by accident.
 
 #!lua
 return cluster
