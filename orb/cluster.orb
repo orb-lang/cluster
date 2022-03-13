@@ -29,7 +29,6 @@ the waters of Knuthian programming with Wirthian characteristics.
 
 ***  Respect the Runtime
 
-
   Lua is a carefully designed language, and was chosen carefully by your
 humble author, out of admiration for the choices which were made in this
 design.
@@ -37,7 +36,6 @@ design.
 This applies even moreso to the choice of implementation, LuaJIT.  This brings
 two offerings to the table: a powerful JIT and a wonderful foreign function
 interface.
-
 
 
 **** Meta-Object Protocol
@@ -98,6 +96,52 @@ in order: compile time, comptime, load time, and runtime.  We necessarily work
 backward toward that goal.
 
 
+** Glossary
+
+Words and concepts in the glossary are solid enough to define and refer to.
+
+Everything which is still fluid or tentative is below, in [[Concepts]
+[@#concepts]].e
+
+
+*** Field
+
+  A key/value pair, considered in terms of the *key*.  This is an efficient
+rather than formal relation, that is, it is the /consequence/ of calling
+=tab[field]= we are concerned with.  A field is a key if it lives on the
+table being indexed, and it is by definition a key which is used to access
+the corresponding value on the *slot*.  A field /defines/ the result of
+=tab[field]= in right-hand positions, and /returns the lvalue/ for a statement
+of the form ==tab[field] = slot==.
+
+
+*** Slot
+
+  A key/value pair, considered in terms of the *value*.  This is an efficient
+rather than formal relation, that is, it is the /rvalue/ of (especially)
+==tab[field] = slot== we are concerned with.  A slot may contain a value on
+the table itself, or anywhere else.  It is the /return value/ of =tab[field]=
+and the /rvalue/ of ==tab[field] = slot ==.
+
+
+*** Message
+
+  A **field**, correponding to a *slot* containing the function, expected to be
+called with the *instance* as the first argument, normally in the sugared form
+=tab:message(...)=.
+
+
+*** Method
+
+  A *callable* living on a slot of a table which is intended primarily to
+receive that table as the first argument.  A **message** is to a *method* as
+a **field** is to a **slot**.  The Actor framework provides a reified Message,
+which is rightly seen as an extension of this concept.
+
+We use =:message= shorthand when referring to fields which will return
+methods.
+
+
 ** Concepts
 
   Cluster (rhymes with cluck) brings together a bewildering number of sources,
@@ -117,5 +161,314 @@ For our purposes, a mold is a way of constraining the rvalue of a given lvalue.
 This returns either the value, which in the general case is an Any, or
 =nil, condition=.  We'll talk about what conditions are and imply later, it's
 a form of error, mostly.
+
+
+** Rationale
+
+  Lua is a minimalist programming language.  What other dynamic-interpreted
+languages tend to do with classes, Lua does with hashtables and a clever
+system which the Lua authors call "metasyntactic extension".
+
+Moonscript is an existence proof that one may implement a familiar object
+system in Lua, with good performance and reasonable developer satisfaction.
+
+Bridge has gone in a different direction.  One strength of a minimalist
+language is that you only have to pay for what you need.
+
+Most modules in bridge follow a simple module / instance format, and we
+represent this intention using a simple function called =meta=.
+
+The basic pattern is to make a table where ==tab.__index = tab==, fill this
+table with methods, define =new= to construct an instance with this metatable,
+set ==tab.idEst = new==, then return it.
+
+This gives us the necessary affordances to build, but requires shenanigans to
+do even single inheritance, because we need to instantiate the module to get
+at the metatable in order to extend it.
+
+Worse, using an =.idEst= slot on the indexed metatable allows for exactly one
+sort of identity.  I've lampshaded this weakness by using e.g.
+==isNode = true== as a 'genus', which is adequate but not actually good;
+continuing to ad-hoc our way through identity and interface is a recipe for
+pain.
+
+The goal here is to develop a meta-object protocol, which allows the user to
+build various rich abstractions, while requiring only minimal changes to the
+80% of modules which returns a function that assigns a metatable.
+
+
+One pattern which isn't carrying its weight is what we've been calling self
+tables.  These are the return value of =meta {}=, such that a sequence such
+as:
+
+#!lua #noKnit #example
+Widget = meta {}
+
+-- here we fill the widget table
+
+SubWidget = meta(Widget)
+#/lua
+
+Will... usually give expected results.
+
+
+**** A close reading of core.cluster.meta
+
+It's worth looking at the current version of meta.  We don't have transclusions
+yet, so it's copy and paste, alas.  This is /mostly/ the basis for inheritance
+and instantiation patterns in bridge, although not entirely.
+
+#!lua #noKnit #example #hashtagTranscludeMe
+function cluster.meta(Meta)
+   Meta = Meta or {}
+
+   -- decoration
+   if Meta
+      and type(Meta) == 'table'
+      and isempty(Meta) then
+
+      Meta.__index = Meta
+      return Meta
+   end
+
+   -- inheritance
+   if Meta and Meta.__index then
+      local tab = {}
+      for field, value in next, Meta, nil do
+         if sub(field, 1, 2) == "__" then
+            tab[field] = value
+         end
+      end
+      if Meta.__meta then
+         tab.__meta = tab.__meta or {}
+         for _, __ in next, Meta.__meta, nil do
+            tab.__meta[_] = __
+         end
+      end
+      tab.__index = tab
+      return setmetatable(tab, Meta)
+   end
+
+   error ("cannot make metatable from type" .. type(Meta))
+end
+#/lua
+
+See that =meta= does the same thing called as =meta()=, and our preferred form
+=meta {}=. I will argue that this at least is a good pattern. Instantiation
+of a table without arguments looks nicer in the form =build {}=, and
+=build ()= should have the same behavior.
+
+The self-indexing pattern avoids creating a separate index table and metatable,
+which in the simple module-instance pattern obscures more than it illuminates.
+
+The statement beginning =if Meta.__meta then= is not currently used anywhere,
+it's a sketch in the direction of an extension of the existing system.
+
+
+*** Seed, Cassette, Meta
+
+  We need a constructor which can double as an identity for any table which is
+specialized from the genus we're defining, as well as a table we can define
+methods and other fields on such that lookup on an instance will return those
+values.  We've handled this with ==new, idEst, and Tab.__index = Tab==, and
+it isn't enough.
+
+The return value we'll call a *Seed*.  This is a table with a call metamethod
+which constructs an instance, and the Cassette as the index metatable, and is
+the return value of our familiar sort of module.  Probably this should be
+read only as well.
+
+The Cassette is a table which is expected to be indexed against /in some way/
+by instances, and in the easy case, this has the usual single inheritance by
+metatable pattern.  It is /not/ a self table, and it is normally but not
+always the =__index= table of the Meta.  The reference is to gene cassettes,
+which if you know what a chromosome is, that's close enough to get the gist.
+
+The Meta is assigned by the constructor to an instance table as the last step
+in instantiating a table.  We've been doing this backward, which is
+forgiveable as the clearest reading of a function, but as we'll see, this
+inhibits composition, not to mention the occasional shallow bug from doing
+things in the constructor which are given different meanings by the metatable.
+
+So a completely blank canvas has these relations:
+
+#!lua #noKnit
+local Seed, Cassette, Meta = setmetatable({}, {}), {}, {__meta = {}}
+
+getmeta(Seed).__index = Cassette
+
+Meta.__index = Cassette
+
+Meta.__meta.__seed = Seed
+#/lua
+
+Although, of course, not created out in the open like that.
+
+In a real program this will look more like any other day at the widget
+factory:
+
+#!lua #noKnit #Example
+local new, Widget, Widget_M = cluster.genus()
+#/lua
+
+After which Widget is assigned the usual collection of methods and base
+values, and new is returned after a constructor is created.
+
+The secret sauce here is that =cluster:cluster= contains a private library of
+everything which passes through it.
+
+So I'm feeling comfortable giving this a go.
+
+#!lua
+local core = require "qor:core"
+#/lua
+
+#!lua
+local cluster = {}
+#/lua
+
+
+**** cluster weak table library
+
+   Cluster observes everything which passes through it, by saving weak
+references.
+
+#!lua
+local weak = assert(core.meta.weak)
+#/lua
+
+Seed, cassette, and meta, have a sort of primitive component type, so cluster
+will want to be able to tell which it might be dealing with when handed a
+given table.
+
+So we need three weak tables for this purpose:
+
+#!lua
+local is_seed, is_tape, is_meta = weak 'k', weak 'k', weak 'k'
+#/lua
+
+As a quirk, we call cassettes "tape" inside cluster.  My excuse is that the
+concept map from the cassette-in-itself to the word "cassette" is at least
+translucent, and that cassette-to-tape is also easy enough.  This relies on a
+pun, though, and offering it to the user as a Tape would be misleading.
+
+It is, moreover, a long word, and without going full Mencius "Procrustes"
+Moldbug on our vocabulary, the trio of four-letter variables makes for
+pleasing code.
+
+The three parts being inter-related, we also map between them:
+
+#!lua
+local seed_tape = weak 'kv'
+local tape_meta = weak 'kv'
+local meta_seed = weak 'kv'
+#/lua
+
+Since these are always and only unique values, we want the maps to work in
+both directions.  But e.g. =meta_seed[meta]= returning a seed isn't obvious,
+so we have synonyms:
+
+#!lua
+local seed_meta, tape_seed, meta_tape = meta_seed, seed_tape, tape_meta
+#/lua
+
+We want a couple functions to do all this bookkeeping for us:
+
+#!lua
+local function store(map, a, b)
+   map[a] = b
+   map[b] = a
+end
+
+local function register(seed, tape, meta)
+   is_seed[seed] = true
+   is_tape[tape] = true
+   is_meta[meta] = true
+   store(seed_tape, seed, tape)
+   store(tape_meta, tape, meta)
+   store(meta_seed, meta, seed)
+   return seed, tape, meta
+end
+#/lua
+
+
+*** genus(family: seed?)
+
+This either creates or extends a genus.
+
+Why genus?  It gives us some climbing room before we bump up on class, for one
+thing.
+
+It's also a reminder that we are using the techniques of prototyping and the
+metaobject protocol.
+
+Last, it's a reminder that applying it repeatedly gives /generic/ results, and
+this is paired with =specialize=, as we shall see.
+
+Note that with three return values, offering =genus {}= would be a confusing
+interface.
+
+#!lua
+local function genus(family)
+   local seed, tape, meta = register({}, {}, {})
+   if not family then
+     -- set em up fresh
+     setmetatable(seed, {__index = tape})
+     meta.__index = tape
+     meta.__meta = {}
+     meta.__meta.__seed = seed
+   else
+     error "can't extend a genus yet, check back later"
+   end
+   return seed, tape, meta
+end
+
+cluster.genus = genus
+#/lua
+
+
+*** construct(seed, builder)
+
+This being a decorator, it returns nothing.
+
+Two important points about the builder: It should expect a seed as the first
+argument, and it *must not* assign a metatable.
+
+ #Todo we should arguably enforce this with a fenv, because Mike Pall has said
+  that the JIT will hate you if you ever reassign the metatable of a given
+  table.
+
+The seed and the metatable have the same index, so it's possible to use
+values from the cassette during building, whether that's a good idea or not.
+
+Cluster takes care of making the builder into a constructor by composing an
+assignment of the metatable with the builder function.
+
+This separation lets us re-use the builder in specializing a given genus, if
+we want to, without performing the forbidden double-metatable assignment.
+
+#!lua
+local compose = assert(core.fn.compose)
+
+local function construct(seed, builder)
+   assert(is_seed[seed], "#1 to construct must be a seed")
+   -- assert(iscallable(builder), "#2 to construct must be callable")
+   local meta = assert(seed_meta[seed], "missing metatable for seed!")
+   local function post(instance)
+      return setmetatable(instance, meta)
+   end
+   getmetatable(seed).__call = compose(builder, post)
+
+   return;
+end
+
+cluster.construct = construct
+#/lua
+
+
+#!lua
+return cluster
+#/lua
+
 
 
