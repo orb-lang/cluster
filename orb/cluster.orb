@@ -55,9 +55,6 @@ set of abstractions which allow the dispatch of various messages to
 appropriate responders through the same syntax used to access literal slots
 on the table in question.
 
-Note as we continue that Lisp-land itself has a definition of object, which
-centers around CLOS and /the/ Meta-Object Protocol, or MOP.
-
 
 ** Types
 
@@ -302,7 +299,7 @@ Meta.__index = Cassette
 Meta.__meta.__seed = Seed
 #/lua
 
-Although, of course, not created out in the open like that.
+Although not created out in the open like that.
 
 In a real program this will look more like any other day at the widget
 factory:
@@ -317,7 +314,10 @@ values, and new is returned after a constructor is created.
 The secret sauce here is that =cluster:cluster= contains a private library of
 everything which passes through it.
 
-So I'm feeling comfortable giving this a go.
+So let's give this a go.
+
+
+*** cluster
 
 #!lua
 local core = require "qor:core"
@@ -444,17 +444,30 @@ cluster.genus = genus
 
 This being a decorator, it returns nothing.
 
-Two important points about the builder: It should expect a seed as the first
-argument, and it *must not* assign a metatable.
 
- #Todo we should arguably enforce this with a fenv, because Mike Pall has said
-  that the JIT will hate you if you ever reassign the metatable of a given
-  table.
+**** Signature of builder: builder(seed, instance, ...) -> instance
+
+In order to successfully extend builders, they can neither create the instance
+nor assign it a metatable.
+
+The result of calling =construct= is a callable with the signature
+=(seed, ...) -> Instance =, so the builder signature is
+=(seed, instance, ...) -> instance=.
+
+The builder *must not* assign a metatable, because the JIT relies on immutable
+table/metatable relationships, and even if it didn't, assigning intermediate
+metatable which are never used is sloppy engineering.
 
 The seed and the metatable have the same index, so it's possible to use
 values from the cassette during building, whether that's a good idea or not.
 
-Cluster takes care of making the builder into a constructor by composing an
+The user must bear in mind that selecting slots from the seed means that
+extensions will be able to change the values.  The builder function is
+normally closed over the Cassette (as well as the Seed and Meta) and can
+choose to incorporate those values instead.
+
+Cluster takes care of making the builder into a constructor by making the object
+and composing an
 assignment of the metatable with the builder function.
 
 This separation lets us re-use the builder in specializing a given genus, if
@@ -463,14 +476,19 @@ we want to, without performing the forbidden double-metatable assignment.
 #!lua
 local compose = assert(core.fn.compose)
 
+local function makeconstructor(builder, meta)
+   return function(seed, ...)
+      local instance = {}
+      return setmetatable(builder(seed, instance, ...), meta)
+   end
+end
+
 local function construct(seed, builder)
    assert(is_seed[seed], "#1 to construct must be a seed")
    -- assert(iscallable(builder), "#2 to construct must be callable")
    local meta = assert(seed_meta[seed], "missing metatable for seed!")
-   local function post(instance)
-      return setmetatable(instance, meta)
-   end
-   getmetatable(seed).__call = compose(builder, post)
+   meta.__meta.builder = builder
+   getmetatable(seed).__call = makeconstructor(builder, meta)
 
    return;
 end
@@ -482,6 +500,11 @@ Here we see how using a local library of weak references can mitigate the
 complexity of having three tables floating around.  We don't need to hand
 back the metatable when adding the constructor, which is just an opportunity
 to pass the cassette by accident.
+
+
+**** extendconstructor(seed, builder)
+
+
 
 #!lua
 return cluster

@@ -461,21 +461,44 @@ cluster.genus = genus
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
 local compose = assert(core.fn.compose)
+
+local function makeconstructor(builder, meta)
+   return function(seed, ...)
+      local instance = {}
+      return setmetatable(builder(seed, instance, ...), meta)
+   end
+end
 
 local function construct(seed, builder)
    assert(is_seed[seed], "#1 to construct must be a seed")
    -- assert(iscallable(builder), "#2 to construct must be callable")
    local meta = assert(seed_meta[seed], "missing metatable for seed!")
-   local function post(instance)
-      return setmetatable(instance, meta)
-   end
-   getmetatable(seed).__call = compose(builder, post)
+   meta.__meta.builder = builder
+   getmetatable(seed).__call = makeconstructor(builder, meta)
 
    return;
 end
 
 cluster.construct = construct
+
+
+
+
+
 
 
 
