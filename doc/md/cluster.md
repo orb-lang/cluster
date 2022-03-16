@@ -307,6 +307,9 @@ local new, Widget, Widget_M = cluster.genus()
 After which Widget is assigned the usual collection of methods and base
 values, and new is returned after a constructor is created\.
 
+Capturing the third value \(Meta\) is optional, so unless there are metamethods
+to be provided or extended, it can just be `local new, Widget = ...`\.
+
 The secret sauce here is that `cluster:cluster` contains a private library of
 everything which passes through it\.
 
@@ -355,34 +358,26 @@ pleasing code\.
 The three parts being inter\-related, we also map between them:
 
 ```lua
-local seed_tape = weak 'kv'
-local tape_meta = weak 'kv'
-local meta_seed = weak 'kv'
+local seed_tape, tape_seed = weak 'kv', weak 'kv'
+local tape_meta, meta_tape = weak 'kv', weak 'kv'
+local meta_seed, seed_meta = weak 'kv', weak 'kv'
 ```
 
-Since these are always and only unique values, we want the maps to work in
-both directions\.  But e\.g\. `meta_seed[meta]` returning a seed isn't obvious,
-so we have synonyms:
+We want a function to do all this bookkeeping for us:
 
 ```lua
-local seed_meta, tape_seed, meta_tape = meta_seed, seed_tape, tape_meta
-```
-
-We want a couple functions to do all this bookkeeping for us:
-
-```lua
-local function store(map, a, b)
-   map[a] = b
-   map[b] = a
-end
+local insert = assert(table.insert)
 
 local function register(seed, tape, meta)
    is_seed[seed] = true
    is_tape[tape] = true
    is_meta[meta] = true
-   store(seed_tape, seed, tape)
-   store(tape_meta, tape, meta)
-   store(meta_seed, meta, seed)
+   seed_tape[seed] = tape
+   tape_seed[tape] = seed
+   tape_meta[tape] = meta
+   meta_tape[meta] = tape
+   meta_seed[meta] = seed
+   seed_meta[seed] = meta
    return seed, tape, meta
 end
 ```
@@ -408,13 +403,12 @@ interface\.
 local function genus(family)
    local seed, tape, meta = register({}, {}, {})
    meta.__meta = {}
-   if not family then
-      -- set em up fresh
-      setmetatable(seed, {__index = tape})
-   else
+   setmetatable(seed, { __index = tape })
+   if family then
       assert(is_seed[family], "provide constructor to extend genus")
+      local meta_tape = seed_tape[family]
+      setmetatable(tape, { __index = meta_tape })
       local _M = seed_meta[family]
-      setmetatable(tape, _M)
       for k, v in pairs(_M) do
          -- except __meta!
          if (not k == '__meta') then
@@ -425,7 +419,7 @@ local function genus(family)
             end
          end
       end
-      meta.__meta.meta = _M -- ... maybe? probably.
+      meta.__meta.meta = _M -- ... yep.
    end
    meta.__index = tape
    meta.__meta.seed = seed
@@ -499,6 +493,84 @@ to pass the cassette by accident\.
 
 
 #### extendconstructor\(seed, builder\)
+
+  This performs the 'natural' extension of a builder function, by passing the
+seed, instance, and all argument, first to the super builder, then to the new
+builder\.
+
+
+
+```lua
+local function extendconstructor(seed, builder)
+   assert(is_seed[seed], "#1 to construct must be a seed")
+   local meta = assert(seed_meta[seed], "missing metatable for seed")
+   local _M = meta.__meta.meta
+   if not _M then
+      error("can't extend a constructor with no inheritance, use construct")
+   end
+
+   local super_build = assert(_M.__meta.builder, "metatable missing a builder")
+   local function _build(seed, instance, ...)
+      local _inst = super_build(seed, instance, ...)
+      return builder(seed, _inst, ...)
+   end
+   meta.__meta.builder = _build
+
+   getmetatable(seed).__call = makeconstructor(_build, meta)
+end
+
+cluster.extendconstructor = extendconstructor
+```
+
+This interface is experimental, to put it mildly, this is just a hunch:
+
+```lua
+cluster.extend = {}
+cluster.extend.constructor = extendconstructor
+```
+
+
+### super\(tape, "message", after\_method\)
+
+The signature we want is `super(tape):message(after_method)`, but let's
+work our way up\.
+
+A MOP will offer a variety of extension protocols, but you'll see a theme,
+which is that of pursuing a general and satisfactory single inheritance which
+survives more than one round of specialization\.
+
+This relies on the tape being a reliable source of truth when looking up the
+super method, which we will have to solve eventually\. This is at least true
+when we use the bog\-standard `__index` chain of tables, and I want to write
+the tricky functionalizing stuff against a need for it\.
+
+Note that this discards the value of the super method, which is compatible
+with the chaining style and anything else where the return value may be
+recomputed\.
+
+
+```lua
+local iscallable = assert(core.fn.iscallable)
+local function super(tape, message, after_method)
+   assert(is_tape[tape], "#1 error: cluster.super extends a cassette")
+   assert(type(message) == 'string', "#2 must be a string")
+   assert(iscallable(after_method), "#3 must be callable")
+   -- let's prevent this happening twice
+   if rawget(tape, message) then
+      error("cassette already has " .. message)
+   end
+   local super_method = tape[message]
+   assert(iscallable(super_method))
+   tape.message = function(tape, ...)
+                     super_method(tape, ...)
+                     return after_method(tape, ...)
+                  end
+
+   return;
+end
+
+cluster.super = super
+```
 
 
 
