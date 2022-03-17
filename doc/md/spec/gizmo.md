@@ -1,0 +1,36 @@
+# Gizmo
+
+
+A Gizmo is of course a directional Widget\.
+
+```lua
+local core = require "qor:core"
+local cluster = require "cluster:cluster"
+local Widget = require "cluster:spec/widget"
+```
+
+```lua
+local new, Gizmo, Gizmo_M = cluster.genus(Widget)
+```
+
+Gizmos come from the factory pointing up:
+
+```lua
+Gizmo.direction = 'up'
+```
+
+Which we can of course shadow with the extended builder\.
+
+```lua
+cluster.extendbuilder(new,
+   function(_new, gizmo, color, number, direction)
+      gizmo.direction = direction
+      return gizmo
+   end)
+```
+
+Time to hand over the gizmo and see where we get:
+
+```lua
+return new
+```

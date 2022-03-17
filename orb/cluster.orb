@@ -414,13 +414,13 @@ local function genus(family)
       setmetatable(tape, { __index = meta_tape })
       local _M = seed_meta[family]
       for k, v in pairs(_M) do
-         -- except __meta!
-         if (not k == '__meta') then
-            meta[k] = v
-         else
+         -- meta we copy
+         if k == '__meta' then
             for _, __ in pairs(v) do
               meta.__meta[_] = __
             end
+         else
+            meta[k] = v
          end
       end
       meta.__meta.meta = _M -- ... yep.
@@ -505,7 +505,7 @@ builder.
 
 
 #!lua
-local function extendconstructor(seed, builder)
+local function extendbuilder(seed, builder)
    assert(is_seed[seed], "#1 to construct must be a seed")
    local meta = assert(seed_meta[seed], "missing metatable for seed")
    local _M = meta.__meta.meta
@@ -523,14 +523,14 @@ local function extendconstructor(seed, builder)
    getmetatable(seed).__call = makeconstructor(_build, meta)
 end
 
-cluster.extendconstructor = extendconstructor
+cluster.extendbuilder = extendbuilder
 #/lua
 
 This interface is experimental, to put it mildly, this is just a hunch:
 
 #!lua
 cluster.extend = {}
-cluster.extend.constructor = extendconstructor
+cluster.extend.builder = extendbuilder
 #/lua
 
 

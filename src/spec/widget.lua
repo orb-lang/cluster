@@ -37,8 +37,11 @@ cluster.construct(new,
 
 
 
+local format = assert(string.format)
+
 function Widget.report(widget)
-   s:chat("I'm a %s widget! number %d! hello!", widget.color, widget.number)
+   return format("I'm a %s widget! number %d! hello!",
+                 widget.color, widget.number)
 end
 
 
