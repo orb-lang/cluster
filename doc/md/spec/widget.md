@@ -40,8 +40,9 @@ Widgets can report:
 local format = assert(string.format)
 
 function Widget.report(widget)
-   return format("I'm a %s widget! number %d! hello!",
+   widget.as_reported = format("I'm a %s widget! number %d! hello!",
                  widget.color, widget.number)
+   return widget.as_reported
 end
 ```
 

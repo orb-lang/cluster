@@ -29,6 +29,25 @@ cluster.extendbuilder(new,
    end)
 ```
 
+Our reporting should allow us to also report as a Widget, because why not?
+
+```lua
+local format, gsub = assert(string.format), assert(string.gsub)
+
+
+cluster.extend.super(Gizmo, "report",
+   function(gizmo, as_widget)
+      if as_widget ~= 'as-widget' then
+         -- some delicate surgery
+         local report = gizmo.as_reported
+                           :gsub("widget", "gizmo")
+                           :gsub("hello!", "my direction is %%s! hello!")
+         gizmo.as_reported = format(report, gizmo.direction)
+      end
+      return gizmo.as_reported
+   end)
+```
+
 Time to hand over the gizmo and see where we get:
 
 ```lua

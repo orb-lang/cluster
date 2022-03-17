@@ -561,15 +561,16 @@ local function super(tape, message, after_method)
    end
    local super_method = tape[message]
    assert(iscallable(super_method))
-   tape.message = function(tape, ...)
-                     super_method(tape, ...)
-                     return after_method(tape, ...)
-                  end
+   tape[message] = function(_tape, ...)
+                      super_method(_tape, ...)
+                      return after_method(_tape, ...)
+                   end
 
    return;
 end
 
 cluster.super = super
+cluster.extend.super = super
 ```
 
 

@@ -32,5 +32,24 @@ cluster.extendbuilder(new,
 
 
 
+local format, gsub = assert(string.format), assert(string.gsub)
+
+
+cluster.extend.super(Gizmo, "report",
+   function(gizmo, as_widget)
+      if as_widget ~= 'as-widget' then
+         -- some delicate surgery
+         local report = gizmo.as_reported
+                           :gsub("widget", "gizmo")
+                           :gsub("hello!", "my direction is %%s! hello!")
+         gizmo.as_reported = format(report, gizmo.direction)
+      end
+      return gizmo.as_reported
+   end)
+
+
+
+
+
 return new
 
