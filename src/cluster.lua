@@ -650,7 +650,29 @@ ur.through = ur.thru
 
 
 
+function ur.NYI()
+   error "missing method!"
+end
 
+
+
+
+
+
+
+
+
+
+
+function ur.no()
+   return false
+end
+
+
+
+function ur.yes()
+   return true
+end
 
 
 

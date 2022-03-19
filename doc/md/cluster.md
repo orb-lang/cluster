@@ -646,7 +646,29 @@ ur.through = ur.thru
 Throws an error if called\.
 
 ```lua
+function ur.NYI()
+   error "missing method!"
+end
+```
 
+
+#### yes\(\), no\(\)
+
+Respond `true` or `false` respectively\.
+
+Used to provide a *meaningful* base response to a predicate message\.  Prefer
+`mu` or `NYI` if the predicate should or must be provided\.
+
+```lua
+function ur.no()
+   return false
+end
+```
+
+```lua
+function ur.yes()
+   return true
+end
 ```
 
 
