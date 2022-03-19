@@ -243,7 +243,7 @@ function cluster.meta(Meta)
          end
       end
       tab.__index = tab
-      return setmetatable(tab, Meta)
+      return setmeta(tab, Meta)
    end
 
    error ("cannot make metatable from type" .. type(Meta))
@@ -290,7 +290,7 @@ things in the constructor which are given different meanings by the metatable.
 So a completely blank canvas has these relations:
 
 #!lua #noKnit
-local Seed, Cassette, Meta = setmetatable({}, {}), {}, {__meta = {}}
+local Seed, Cassette, Meta = setmeta({}, {}), {}, {__meta = {}}
 
 getmeta(Seed).__index = Cassette
 
@@ -321,6 +321,23 @@ So let's give this a go.
 
 
 *** cluster
+
+
+**** Localize All The Things
+
+  Cluster takes the unusual step of localizing everything, even single-name
+globals.  It's not unheard of elsewhere in the code, we use the pattern in
+Grammar.
+
+#!lua
+local assert = assert
+local require = assert(require)
+local error   = assert(error)
+local getmeta, setmeta = assert(getmetatable), assert(setmetatable)
+-- I'm going to shadow these because I'll forget otherwise
+local getmetatable, setmetatable = nil, nil
+#/lua
+
 
 #!lua
 local core = require "qor:core"
@@ -404,14 +421,16 @@ Note that with three return values, offering =genus {}= would be a confusing
 interface.
 
 #!lua
+local pairs = assert(pairs)
+
 local function genus(family)
    local seed, tape, meta = register({}, {}, {})
    meta.__meta = {}
-   setmetatable(seed, { __index = tape })
+   setmeta(seed, { __index = tape })
    if family then
       assert(is_seed[family], "provide constructor to extend genus")
       local meta_tape = seed_tape[family]
-      setmetatable(tape, { __index = meta_tape })
+      setmeta(tape, { __index = meta_tape })
       local _M = seed_meta[family]
       for k, v in pairs(_M) do
          -- meta we copy
@@ -473,7 +492,7 @@ local compose = assert(core.fn.compose)
 local function makeconstructor(builder, meta)
    return function(seed, ...)
       local instance = {}
-      return setmetatable(builder(seed, instance, ...), meta)
+      return setmeta(builder(seed, instance, ...), meta)
    end
 end
 
@@ -482,7 +501,7 @@ local function construct(seed, builder)
    -- assert(iscallable(builder), "#2 to construct must be callable")
    local meta = assert(seed_meta[seed], "missing metatable for seed!")
    meta.__meta.builder = builder
-   getmetatable(seed).__call = makeconstructor(builder, meta)
+   getmeta(seed).__call = makeconstructor(builder, meta)
 
    return;
 end
@@ -496,13 +515,11 @@ back the metatable when adding the constructor, which is just an opportunity
 to pass the cassette by accident.
 
 
-**** extendconstructor(seed, builder)
+**** extendbuilder(seed, builder)
 
   This performs the 'natural' extension of a builder function, by passing the
 seed, instance, and all argument, first to the super builder, then to the new
 builder.
-
-
 
 #!lua
 local function extendbuilder(seed, builder)
@@ -520,7 +537,7 @@ local function extendbuilder(seed, builder)
    end
    meta.__meta.builder = _build
 
-   getmetatable(seed).__call = makeconstructor(_build, meta)
+   getmeta(seed).__call = makeconstructor(_build, meta)
 end
 
 cluster.extendbuilder = extendbuilder
@@ -555,6 +572,7 @@ recomputed.
 
 #!lua
 local iscallable = assert(core.fn.iscallable)
+local rawget = assert(rawget)
 local function super(tape, message, after_method)
    assert(is_tape[tape], "#1 error: cluster.super extends a cassette")
    assert(type(message) == 'string', "#2 must be a string")
@@ -577,6 +595,65 @@ cluster.super = super
 cluster.extend.super = super
 #/lua
 
+
+*** Cluster .ur methods
+
+These are primitive functions which provide suitable base-layer behaviors for
+genera.
+
+#!lua
+local ur = {}
+cluster.ur = ur
+#/lua
+
+
+*** mu()
+
+This returns, regardless of argument.
+
+#!lua
+function ur.mu()
+   return
+end
+#/lua
+
+
+*** pass(a)
+
+Ignores all but the first argument, which it returns
+
+#!lua
+function ur.pass(a)
+   return a
+end
+#/lua
+
+
+*** thru(_, ...), AKA through
+
+Ignores /only/ the first argument, returning any others.
+
+The shorter spelling is preferred, but synonyms are cheap and these two have
+reference equality.
+
+#!lua
+function ur.thru(_, ...)
+   return ...
+end
+
+ur.through = ur.thru
+#/lua
+
+
+**** NYI(!)
+
+Throws an error if called.
+
+#!lua
+function ur.NYI()
+   error "missing method!"
+end
+#/lua
 
 
 #!lua

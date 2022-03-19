@@ -323,6 +323,23 @@
 
 
 
+
+
+
+
+
+
+
+local assert = assert
+local require = assert(require)
+local error   = assert(error)
+local getmeta, setmeta = assert(getmetatable), assert(setmetatable)
+-- I'm going to shadow these because I'll forget otherwise
+local getmetatable, setmetatable = nil, nil
+
+
+
+
 local core = require "qor:core"
 
 
@@ -404,14 +421,16 @@ end
 
 
 
+local pairs = assert(pairs)
+
 local function genus(family)
    local seed, tape, meta = register({}, {}, {})
    meta.__meta = {}
-   setmetatable(seed, { __index = tape })
+   setmeta(seed, { __index = tape })
    if family then
       assert(is_seed[family], "provide constructor to extend genus")
       local meta_tape = seed_tape[family]
-      setmetatable(tape, { __index = meta_tape })
+      setmeta(tape, { __index = meta_tape })
       local _M = seed_meta[family]
       for k, v in pairs(_M) do
          -- meta we copy
@@ -473,7 +492,7 @@ local compose = assert(core.fn.compose)
 local function makeconstructor(builder, meta)
    return function(seed, ...)
       local instance = {}
-      return setmetatable(builder(seed, instance, ...), meta)
+      return setmeta(builder(seed, instance, ...), meta)
    end
 end
 
@@ -482,14 +501,12 @@ local function construct(seed, builder)
    -- assert(iscallable(builder), "#2 to construct must be callable")
    local meta = assert(seed_meta[seed], "missing metatable for seed!")
    meta.__meta.builder = builder
-   getmetatable(seed).__call = makeconstructor(builder, meta)
+   getmeta(seed).__call = makeconstructor(builder, meta)
 
    return;
 end
 
 cluster.construct = construct
-
-
 
 
 
@@ -520,7 +537,7 @@ local function extendbuilder(seed, builder)
    end
    meta.__meta.builder = _build
 
-   getmetatable(seed).__call = makeconstructor(_build, meta)
+   getmeta(seed).__call = makeconstructor(_build, meta)
 end
 
 cluster.extendbuilder = extendbuilder
@@ -555,6 +572,7 @@ cluster.extend.builder = extendbuilder
 
 
 local iscallable = assert(core.fn.iscallable)
+local rawget = assert(rawget)
 local function super(tape, message, after_method)
    assert(is_tape[tape], "#1 error: cluster.super extends a cassette")
    assert(type(message) == 'string', "#2 must be a string")
@@ -575,6 +593,63 @@ end
 
 cluster.super = super
 cluster.extend.super = super
+
+
+
+
+
+
+
+
+
+local ur = {}
+cluster.ur = ur
+
+
+
+
+
+
+
+
+function ur.mu()
+   return
+end
+
+
+
+
+
+
+
+
+function ur.pass(a)
+   return a
+end
+
+
+
+
+
+
+
+
+
+
+
+function ur.thru(_, ...)
+   return ...
+end
+
+ur.through = ur.thru
+
+
+
+
+
+
+
+
 
 
 
