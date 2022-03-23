@@ -191,145 +191,6 @@
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 local assert = assert
 local require = assert(require)
 local error   = assert(error)
@@ -401,6 +262,52 @@ local function register(seed, tape, meta)
    seed_meta[seed] = meta
    return seed, tape, meta
 end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -623,7 +530,18 @@ end
 
 
 
-function ur.pass(a)
+function ur.pass(...)
+   return ...
+end
+
+
+
+
+
+
+
+
+function ur.chain(a)
    return a
 end
 
