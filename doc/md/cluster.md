@@ -313,6 +313,25 @@ rawset(getfenv(1), "idest", idest)
 ```
 
 
+## order, genus, and species
+
+
+### order\(contract?\)
+
+This is a refactor, because I did the simpler thing and made `genus` itself
+nullable\.
+
+And I might keep that, because the idea that an empty order does what genus
+does right now if called with no arguments is valid\.
+
+The idea here is that calling order with a table \(or it might be a function\)
+will configure it according to the Cluster *contract*, which is a thing we
+don't have yet\.
+
+`order` will come first, but our initial definition will forbid an argument so
+that we can prefer it over genus for new orders\.
+
+
 ### genus\(family: seed?\)
 
 This either creates or extends a genus\.
@@ -359,6 +378,17 @@ local function genus(family)
 end
 
 cluster.genus = genus
+```
+
+```lua
+local function order(no_table)
+   if no_table then
+      error "calling cluster.order with a contract is NYI"
+   end
+   return genus()
+end
+
+cluster.order = order
 ```
 
 

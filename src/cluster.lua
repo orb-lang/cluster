@@ -328,6 +328,25 @@ end
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 local pairs = assert(pairs)
 
 local function genus(family)
@@ -357,6 +376,17 @@ local function genus(family)
 end
 
 cluster.genus = genus
+
+
+
+local function order(no_table)
+   if no_table then
+      error "calling cluster.order with a contract is NYI"
+   end
+   return genus()
+end
+
+cluster.order = order
 
 
 
