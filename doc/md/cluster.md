@@ -392,6 +392,15 @@ cluster.order = order
 ```
 
 
+#### cluster\.species\(specimen?\)
+
+Unwritten, replacement for the `meta {}` pattern\.
+
+Called `species` because opportunities for extension are limited\.  Will use
+a self\-table pattern, but registered with `cluster`, and designed so that a
+species can be promoted to an order without needing to modify user code\.
+
+
 ### construct\(seed, builder\)
 
 This being a decorator, it returns nothing\.
@@ -662,9 +671,9 @@ interface\.
 
 #### Meta\-Object Protocol
 
-  One of the attractions of Lua is that it embraces the correct definition ofobject" to use when programming anywhere near the C runtime\.
+  One of the attractions of Lua is that it embraces the correct definition of
+"object" to use when programming anywhere near the C runtime\.
 
-"
 This is more than just a particular layout of memory, pointer references can
 make the instance of a particular object arbitrarily complex, but what an
 object **is** to the C programmer needn't be defined to point out that Lua uses

@@ -1,0 +1,54 @@
+* Ontos
+
+
+  Still a nascent idea.
+
+To start with application: returning three values from =genus= is an
+opportunity for numerous shallow errors, and the policy of =Widget= and
+=Widget_M=, while sound, is visually noisy.
+
+I'm confident it's the correct separation of concerns (except when it isn't),
+but we have an opportunity to take advantage of =fenvs= in cases where a
+genus is defined within a single compilation unit (almost always a file).
+
+Using Ontos would make a fenv which looks up global indexing through the
+existing fenv, and does global /assignment/ to the Cassette, which we'd still
+return, but don't often (necessarily ever) need to refer to.
+
+This could become as simple as
+
+#!lua #noKnit #example
+-- We would probably call new 'Widget' for this pattern but
+-- for the sake of clarity in documentation, we call the seed 'new'
+
+local new = cluster.ontos()
+
+-- we could be catching new, Widget, Widget_M, but we don't need them
+
+count = 0
+
+print = false
+
+function add(widget, count)
+   widget.count = widget.count + count
+   if widget.print then
+      print(widget.count, "Mua ha ha!")
+   end
+end
+
+return new
+#/lua
+
+This presumes that cluster starts using a default constructor, which it could.
+
+What we see here is that the fenv itself is a clean slate, so we handle
+indexing and assignment on completely different channels.  The 'global'
+assignment to =print= becomes a base field on =Widget=, and the print function
+call is looked up on the calling fenv with one level of function redirection.
+
+This is branchless and not variadic so it should be a cinch to JIT it. The
+option to localize globals is always available, constitutes good practice, and
+avoids speculation.
+
+That's the sketch, I'll come back to it later.
+
