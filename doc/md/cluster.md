@@ -202,10 +202,24 @@ local getmetatable, setmetatable = nil, nil
 
 ```lua
 local core = require "qor:core"
+local lazyloader = assert(core.module.lazyloader)
 ```
 
+### lazy cluster
+
+I'm writing cluster as a mostly\-lazy system\.
+
+If anything I'll make it lazier over time\.  Much of what is created in this
+source file relies on a set of common upvalues holding weak references, more
+on that later\.
+
+
 ```lua
-local cluster = {}
+local cluster = lazyloader {
+                   response = "cluster:response",
+                   -- clade = "cluster:clade",
+                   -- G     = "cluster:G",
+                }
 ```
 
 
@@ -308,6 +322,7 @@ local function idest(obj, pred)
 
    return false
 end
+cluster.idest = idest
 
 rawset(getfenv(1), "idest", idest)
 ```
@@ -671,9 +686,9 @@ interface\.
 
 #### Meta\-Object Protocol
 
-  One of the attractions of Lua is that it embraces the correct definition of
-"object" to use when programming anywhere near the C runtime\.
+  One of the attractions of Lua is that it embraces the correct definition ofobject" to use when programming anywhere near the C runtime\.
 
+"
 This is more than just a particular layout of memory, pointer references can
 make the instance of a particular object arbitrarily complex, but what an
 object **is** to the C programmer needn't be defined to point out that Lua uses

@@ -25,35 +25,64 @@ This is well and good until we need to use coroutines for anything else.
 
 That's where the Response comes in.
 
-Because we ignore the yield values of 'magic' coroutines, we can include a
-table which becomes a second copy of the return values.
+Because we ignore the yield values of 'magic' coroutines, we can return
+anything we want.
 
-Why? I want to demonstrate that it works before getting into that.
+The bridge protocol specifies that async processes which expect to resume
+their own thread on a subsequent handle return a Response.
 
+This allows us to set up an environment where magic coroutines and any other
+use of coroutines can cooperate with each other.
 
 ** Response
 
-This should be a =species= because no extension is intended, and I would
-prefer to use a simple function for =new=.
+A Response table contains a reference to the running coroutine, and a
+self-reference as a sentinel value, at =[1]=.  It also can (should) contain a
+reference to the async handle the process will resume on, although the correct
+execution of code in this module does not rely on the handle.
 
-In the meantime, I'm going to hand-roll a meta-compatible pattern, which is
-simple enough:
+The coroutine is mandatory and will be pulled from =running= if it isn't
+provided.
 
 #!lua
 local Response = {}
 Response.__index = Response
 #/lua
 
-Responses are created with an index which contains only a reference to itself
-at [1], on the reasonable premise that =nil= might wish to be returned but
-there is never any call for the process to =resume= the response itself.
+The original intention of the Response was to =pack= all the resumed values,
+so that the coroutine could die and they would still be accessible.
+
+The code still does this, although it didn't turn out to solve the problem
+this module was created to solve.
+
+What does solve it is that reference to the coroutine.
 
 
-*** Response() -> Reponse
+**** The One Weird Trick
+
+We're using coroutine nests to implement message passing in Actors.  This
+pattern creates a version of the familiar =coroutine= table, one with new
+functions named =create=, =resume= and =yield=, such that the new =resume=
+will only see a coroutine created by the corresponding =create=, and yielded
+by the nest's =yield=.  Otherwise it yields itself.  There is a =wrap= to
+complete the set.
+
+So what we do is set up a guardian coroutine on any input into Modeselektor.
+If any magic coroutine yields inside the event response, this gets to the
+guardian, and the guardian simply replaces the Response coroutine on =.co=
+with the work coroutine.
+
+When this is resumed, it travels all the way back to get the returned, without
+breaking the Message-passing system or losing our frame.
+
+
+*** Response()
 
 #!lua
-local function new()
+local function new(co, handle)
    local response = {}
+   response.co = co or coroutine.running()
+   response.handle = handle
    response[1] = response
    return setmetatable(response, Response)
 end
@@ -62,15 +91,119 @@ Response.idEst = new
 #/lua
 
 
+**** Response.isResponse
+
+We provide a simple flag for Response detection.
+
+I've mostly used this technique, ironically, to get past the limitations of the
+=idEst= pattern.
+
+We're moving toward =idest= as a pervasive global with general applicability,
+but it is not in fact a keyword, nor a language primitive.
+
+Consumers of a Response aren't expected to be producers of them.  This flag
+makes it unnecessary to require this module to enquire.
+
+#!lua
+Response.isResponse = true
+#/lua
+
+
+
 ** Interface
 
-The idea is that the async process returns the values two ways: by packing
-them into the Response table (which was yielded before the 'await'), and
-by resuming them into the original thread.
+  The idea is that the Response contains the coroutine which will be used to
+resume on the far side of the callback, and the handle which it will resume
+on.  When the callback is triggered, the Response will also =:pack= the
+resumed data into =[1]=, where it can subsequently be retrieved with
+=:unpack=.
 
-The consumer interface has two methods, and the producer side one.
+As mentioned, the usual move is to replace the coroutine and expect everything
+to work out.  If it doesn't then the Response is an opportunity to clean up
+afterwards, and knowing what the callback returned with might be helpful.
 
-We present these in the order they will be called.
+The use of responses by replacing coroutines was added after I put in all the
+=:pack= and =:unpack= logic, because I hadn't thought of something which would
+actually /work/.
+
+I'm leaving it in because, again, it's a chance to look at the response value
+from the callback if things break, and architectures with a lot of coroutines
+and callbacks don't leave lengthy stack traces.
+
+We're left with something which can do two things, and it's only doing one of
+them.  The interesting part is that I'm planning to do the second of these
+things very soon with Valiant, which will return a "response" that gets filled
+in either on the next tick, or whenever it's =:ready=.
+
+I'm wary of doing two superficially unrelated things with one module, just
+because it's capable of it.
+
+
+*** Producer: :respond
+
+  The producer follows the magic coroutine pattern by setting up an event with
+a callback, then yielding the response immediately.
+
+The goal of the Response protocol is to support two pathways.  The magic
+pathway ignores the response completely and resumes the data returned to the
+callback directly, while the scheduler pathway replaces the Response's
+coroutine with one which will get back down to the callback when =resume=d.
+
+
+**** Response:pack(...) -> response
+
+  This is only the action of packing the response values, most applications
+will use =:respond=, which calls this.
+
+We use =pack= itself to make a new table, which overwrites the self reference
+at =[1]=.
+
+This gets around what must be a bug in LuaJIT, where the value of =.n= is
+ignored by =unpack=, but only sometimes, and never for a table created with
+=pack=.
+
+Annoying though it is, correctness is worth the extra allocation needed in
+this implementation.
+
+#!lua
+function Response.pack(response, ...)
+   response[1] = pack(...)
+   return response
+end
+#/lua
+
+
+**** Response:respond(co, ...) -> resume(co, ...)
+
+  This combines packing the arguments into the Response and resuming the
+coroutine.
+
+#!lua
+local resume = assert(coroutine.resume)
+
+function Response.respond(response, co, ...)
+   response:pack(...)
+   return resume(response.co, co, ...)
+end
+#/lua
+
+
+*** Consumer Methods: :ready and :unpack
+
+  The primary point of returning a Response is so that the function at the top
+of a yield chain can replace the original coroutine with one which will walk
+down the resume chain back to the original point of yield.
+
+This makes it possible to use those async processes in a way which cooperates
+with message passing.
+
+The main consumer interface is therefore replacing the value of =response.co=,
+rather than calling methods.
+
+Two are however available.  =:ready= means the coroutine has resumed with
+data, and =:unpack= will unpack that data, with no regard to any subsequent
+execution prompted by the coroutine resuming.
+
 
 *** Reponse:ready() -> boolean
 
@@ -90,35 +223,13 @@ function Response.ready(response)
 end
 #/lua
 
-This is matched on the producer side with =:pack=.
-
-
-*** Response:pack(...) -> response
-
-  The intention of this method is that the async process which created the
-Response, will call it on the same parameters, which it returns immediately
-thereafter by resuming the coroutine which earlier yielded the response.
-
-This is paired with =:unpack=, and internally =pack= and =unpack= are called.
-
-This gets around what must be a bug in LuaJIT, where the value of =.n= is
-ignored by =unpack=, but only sometimes, and never for a table created with
-=pack=.
-
-Annoying though it is, correctness is worth the extra allocation needed in
-this implementation.
-
-#!lua
-function Response.pack(response, ...)
-   response[1] = pack(...)
-   return response
-end
-#/lua
+The Response will continue to return =false= on =:ready= until the producer
+calls =:pack=, or more likely =:respond=.
 
 
 *** Response:unpack() -> ...
 
-Returns the unpacked paramters.
+Returns the unpacked parameters.
 
 #!lua
 function Response.unpack(response)
@@ -126,6 +237,41 @@ function Response.unpack(response)
 end
 #/lua
 
+*** #Response
+
+Returns the amount of parameters available, which will be 0 until the
+response is =:ready=.
+
+#!lua
+function Response.__len(response)
+   if response[1] == response then
+      return 0
+   end
+
+   return #response[1]
+end
+#/lua
+
 #!lua
 return new
 #/lua
+
+
+** More With Response
+
+This is a powerful tool for control flow. At the moment, it's doing more than
+it needs to, what with =:pack= being called internally while I have yet to use
+=:unpack=.
+
+It's capable of doing quite a bit more than threading the old needle through
+the twists of the shell.  Because we use =:respond=, we have a chance to take
+conditional action, including deferring further action.
+
+That seems like the most interesting one: instead of resuming, we build a
+thunk and exit the callback.  The Response can call the thunk at any point to
+resume execution.
+
+I'm dreaming up reasons to have this but it's worth waiting to actually have
+one.  The idea is that we'll add a flag, =.suspend=, which is set to =false=
+on =Response=.  If the consumer sets it to true, then we build a
+thunk to resume, and exit, the Response would be restarted with =:continue=.

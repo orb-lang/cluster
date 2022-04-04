@@ -202,10 +202,24 @@ local getmetatable, setmetatable = nil, nil
 
 #!lua
 local core = require "qor:core"
+local lazyloader = assert(core.module.lazyloader)
 #/lua
 
+*** lazy cluster
+
+I'm writing cluster as a mostly-lazy system.
+
+If anything I'll make it lazier over time.  Much of what is created in this
+source file relies on a set of common upvalues holding weak references, more
+on that later.
+
+
 #!lua
-local cluster = {}
+local cluster = lazyloader {
+                   response = "cluster:response",
+                   -- clade = "cluster:clade",
+                   -- G     = "cluster:G",
+                }
 #/lua
 
 
@@ -306,6 +320,7 @@ local function idest(obj, pred)
 
    return false
 end
+cluster.idest = idest
 
 rawset(getfenv(1), "idest", idest)
 #/lua

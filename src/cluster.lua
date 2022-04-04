@@ -202,10 +202,24 @@ local getmetatable, setmetatable = nil, nil
 
 
 local core = require "qor:core"
+local lazyloader = assert(core.module.lazyloader)
 
 
 
-local cluster = {}
+
+
+
+
+
+
+
+
+
+local cluster = lazyloader {
+                   response = "cluster:response",
+                   -- clade = "cluster:clade",
+                   -- G     = "cluster:G",
+                }
 
 
 
@@ -262,6 +276,7 @@ local function register(seed, tape, meta)
    seed_meta[seed] = meta
    return seed, tape, meta
 end
+
 
 
 
