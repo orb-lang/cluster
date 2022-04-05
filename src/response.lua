@@ -35,20 +35,32 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
 local s = require "status:status" ()
 s.verbose = true
 
 
 
+
+
+
+
+
+
+
+
+
 local autothread = require "cluster:autothread"
-
-
-
-
-
-
-
-
 
 
 
@@ -89,15 +101,23 @@ Response.__index = Response
 
 
 
-local function new(co, handle)
+
+
+
+
+
+
+
+
+local running = assert(coroutine.running)
+
+local function new(handle)
    s:bore("created a response") --, trace %s", debug.traceback())
    local response = {}
-   -- we're going to ignore the first argument and remove it
-   response.co = coroutine.running()
+   response.co = running()
    response.work = response.co
    response.handle = handle
-   -- this should be a real flag I thing
-   response[1] = response
+   response.pending = true
    return setmetatable(response, Response)
 end
 
@@ -176,12 +196,9 @@ Response.isResponse = true
 
 
 
-
-
-
-
 function Response.pack(response, ...)
    response[1] = pack(...)
+   response.pending = false
    return response
 end
 
@@ -234,13 +251,8 @@ end
 
 
 
-
 function Response.ready(response)
-   if response[1] == response then
-      return false
-   else
-      return true
-   end
+   return not response.pending
 end
 
 
@@ -265,7 +277,7 @@ end
 
 
 function Response.__len(response)
-   if response[1] == response then
+   if response.pending then
       return 0
    end
 

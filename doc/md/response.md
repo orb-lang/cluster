@@ -34,10 +34,30 @@ their own thread on a subsequent handle return a Response\.
 This allows us to set up an environment where magic coroutines and any other
 use of coroutines can cooperate with each other\.
 
+
+##### About the YAGNI tag
+
+I'm trying to clearly demarcate which parts of this interface are actually
+used, and which parts are just contemplated for future use\.
+
+It stands for You \(Ain't/Are\) Gonna Need It\.
+
+
+#### imports
+
 ```lua
 local s = require "status:status" ()
 s.verbose = true
 ```
+
+
+#### autothread
+
+  Autothread is our little trick to restart coroutines which come from a
+coroutine nest\.
+
+Eventually, we will include the ability to attach another threader to a
+response, to support a richer control flow than autothread\.
 
 ```lua
 local autothread = require "cluster:autothread"
@@ -45,14 +65,6 @@ local autothread = require "cluster:autothread"
 
 
 ## Response
-
-A Response table contains a reference to the running coroutine, and a
-self\-reference as a sentinel value, at `[1]`\.  It also can \(should\) contain a
-reference to the async handle the process will resume on, although the correct
-execution of code in this module does not rely on the handle\.
-
-The coroutine is mandatory and will be pulled from `running` if it isn't
-provided\.
 
 ```lua
 local Response = {}
@@ -77,27 +89,35 @@ will only see a coroutine created by the corresponding `create`, and yielded
 by the nest's `yield`\.  Otherwise it yields itself\.  There is a `wrap` to
 complete the set\.
 
-So what we do is set up a guardian coroutine on any input into Modeselektor\.
-If any magic coroutine yields inside the event response, this gets to the
-guardian, and the guardian simply replaces the Response coroutine on `.co`
-with the work coroutine\.
+So what we do is set up `autothread` on any input into Modeselektor\. If any
+magic coroutine yields inside the event response, this gets to autothread,
+which replaces the Response coroutine on `.work` with the work coroutine\.
 
 When this is resumed, it travels all the way back to get the returned, without
 breaking the Message\-passing system or losing our frame\.
 
+If the Response sees a different value for `.work` than the original coroutine
+on `.co`, it autothreads again\.  This allows control flow to move through
+asynchronous callbacks in a mostly\-transparent way\.
 
-### Response\(\)
+
+### Response\(handle\)
+
+The handle is attached so that some future system can override autothread with
+a supervising loop which takes care of long\-running processes\.
+
+We used to pass in the coroutine but there's no advantage in doing this\.
 
 ```lua
-local function new(co, handle)
+local running = assert(coroutine.running)
+
+local function new(handle)
    s:bore("created a response") --, trace %s", debug.traceback())
    local response = {}
-   -- we're going to ignore the first argument and remove it
-   response.co = coroutine.running()
+   response.co = running()
    response.work = response.co
    response.handle = handle
-   -- this should be a real flag I thing
-   response[1] = response
+   response.pending = true
    return setmetatable(response, Response)
 end
 
@@ -164,24 +184,21 @@ callback directly, while the scheduler pathway replaces the Response's
 coroutine with one which will get back down to the callback when `resume`d\.
 
 
-#### Response:pack\(\.\.\.\) \-> response
+#### Response:pack\(\.\.\.\) \-> response  \#YAGNI
 
   This is only the action of packing the response values, most applications
 will use `:respond`, which calls this\.
 
-We use `pack` itself to make a new table, which overwrites the self reference
-at `[1]`\.
+We use `pack` itself to make a new table, which we put at `[1]`
 
 This gets around what must be a bug in LuaJIT, where the value of `.n` is
 ignored by `unpack`, but only sometimes, and never for a table created with
 `pack`\.
 
-Annoying though it is, correctness is worth the extra allocation needed in
-this implementation\.
-
 ```lua
 function Response.pack(response, ...)
    response[1] = pack(...)
+   response.pending = false
    return response
 end
 ```
@@ -226,21 +243,16 @@ data, and `:unpack` will unpack that data, with no regard to any subsequent
 execution prompted by the coroutine resuming\.
 
 
-### Reponse:ready\(\) \-> boolean
+### Reponse:ready\(\) \-> boolean  \#YAGNI
 
-  A predicate called by the consumer side, which answers whether the data is
-ready for use\.
+  A predicate which may be called by the consumer side, which answers whether
+the data is ready for use\.
 
-Hopefully straightforward, we're simply using the instance itself as the
-placeholder, in a may\-as\-well sort of way\.
+Returns the negation of the `.pending` flag\.
 
 ```lua
 function Response.ready(response)
-   if response[1] == response then
-      return false
-   else
-      return true
-   end
+   return not response.pending
 end
 ```
 
@@ -248,7 +260,7 @@ The Response will continue to return `false` on `:ready` until the producer
 calls `:pack`, or more likely `:respond`\.
 
 
-### Response:unpack\(\) \-> \.\.\.
+### Response:unpack\(\) \-> \.\.\.  \#YAGNI
 
 Returns the unpacked parameters\.
 
@@ -258,14 +270,14 @@ function Response.unpack(response)
 end
 ```
 
-### \#Response
+### \\\#Response  \#YAGNI
 
 Returns the amount of parameters available, which will be 0 until the
 response is `:ready`\.
 
 ```lua
 function Response.__len(response)
-   if response[1] == response then
+   if response.pending then
       return 0
    end
 

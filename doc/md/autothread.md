@@ -13,6 +13,38 @@ falls flat\.
 The middle layer of the solution uses coroutine nests, and the top and bottom
 use `autothread`\.
 
+
+### Autothread
+
+  Autothread either makes or resumes a coroutine, and handles three cases:
+
+
+- Returning at the end of a successful execution
+
+
+- Throwing errors
+
+
+- Threading a Response
+
+Barring those, it yields everything it got back \(excepting the ok\), making it
+suitable as a middleware \(or more likely for us, surfacing an error in the
+code by attempting to yield the main thread\)\.
+
+
+### The Next Challenge
+
+  Autothread is fine and dandy, but some application will call for a custom
+threading handler at some point\.
+
+Never mind why, there are a bunch of neat things we can do, but the point is
+that then, and not now, we'll need to add the ability to pass the custom
+threader in the Response instead of autothread\.
+
+Meanwhile, this will repeatedly restart nested coroutines when an async
+module yields a Response, and that's why we need it to do\.
+
+
 ```lua
 local create, status = assert(coroutine.create), assert(coroutine.status)
 local yield, resume = assert(coroutine.yield), assert(coroutine.resume)
