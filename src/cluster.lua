@@ -87,110 +87,6 @@
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 local assert = assert
 local require = assert(require)
 local error   = assert(error)
@@ -298,25 +194,29 @@ end
 
 
 
+local function idest(obj, pred)
+   -- primitive
+   if type(pred) == 'string' then
+      return type(obj) == pred
+   end
+   -- try new-style first
+   if type(obj) == 'table' then
+      local _M = getmetatable(obj)
+      if _M and is_meta[_M] then
+         while _M do
+            if _M.__meta.seed == pred then
+               return true
+            end
+            _M = _M.__meta.meta
+         end
+      elseif obj.idEst == pred then
+         return true
+      end
+   end
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+   return false
+end
+cluster.idest = idest
 
 
 
@@ -453,7 +353,9 @@ local compose = assert(core.fn.compose)
 local function makeconstructor(builder, meta)
    return function(seed, ...)
       local instance = {}
-      return setmeta(builder(seed, instance, ...), meta)
+      return setmeta(assert(builder(seed, instance, ...),
+                            "builder must return the subject"),
+                     meta)
    end
 end
 

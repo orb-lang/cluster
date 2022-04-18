@@ -50,8 +50,17 @@ that part yet.
 
 Not ready to implement yet, but the basics are all here.
 
+The first version of this is going to be a bit clunky, I expect.  The design
+brief is really "write syntax sugar making Nodes easier to work with", and
+Nodes don't really come with constructors. Is this an inevitable property of
+clades?  Probably not.
 
-*** clade.basal(seed?)
+#!lua
+local clade = {}
+#/lua
+
+
+*** clade.basal(base?)
 
 The delicate part is how Clades interact with the cluster triad.
 
@@ -60,8 +69,34 @@ even metatables.  While it would be useful (and I have a strategy in some
 cases) to provide a constructor, it's important that constructors work
 compatibly while being optional in some sense?
 
+For now, =basal= doesn't even extend with a =base=, but it should.
+
+#!lua
+local function _basal(basis)
+   -- ignore basis for now
+   local basal = {} -- make note of this?
+   return basal
+end
+clade.basal = _basal
+#/lua
+
 
 *** clade.phyle(basal)
+
+Phyle needs to automatically create metatables when indexed, and I should
+probably provide some rational basis for making =Phyle.Table= autocreate a
+=.table= field, not a =Table= field.
+
+This is a case where the behavior I need isn't a sensible default.
+
+#!lua
+local function _phyle(basis)
+   local phyle = {basis}
+   return phyle
+end
+
+clade.phyle = _phyle
+#/lua
 
 
 *** clade(basal, phyle, phyle...)

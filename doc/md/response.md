@@ -138,10 +138,12 @@ but it is not in fact a keyword, nor a language primitive\.
 Consumers of a Response aren't expected to be producers of them\.  This flag
 makes it unnecessary to require this module to enquire\.
 
+This also avoids resolving the circular require `autothread` would otherwise
+call for\.
+
 ```lua
 Response.isResponse = true
 ```
-
 
 
 ## Interface

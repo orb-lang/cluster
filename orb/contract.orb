@@ -11,6 +11,10 @@ both to provide, at low cost, some of what static typing gives a language
 which has it, and work on a basis for a gradually typed language over Lua,
 using inference, ADTs and flow types, and such niceties.
 
+#!lua
+local core = require "qor:core"
+#/lua
+
 
 ** basis
 
@@ -121,8 +125,25 @@ function basis.iscdata(a)
 end
 #/lua
 
-=basis= will most likely have collective membership tests like =callable= as
-well.
+
+** shape
+
+Returns whether an object is valid to use with a particular syntax.
+
+
+*** hasmetamethods
+
+  We have a helper callable table for constructing these closures.
+
+  #Todo maye hasmetamethod a closurizer like hasfield.
+
+#!lua
+local hasmetamethod = core.meta.hasmetamethod
+#/lua
+
+#!lua
+local hascall;
+#/lua
 
 
 ** law

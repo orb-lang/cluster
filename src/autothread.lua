@@ -50,8 +50,12 @@ local function autothread(thread, ...)
    local work;
    if type(thread) == 'thread' then
       work = thread
-   else
+   elseif type(thread) == 'function' then
       work = create(thread)
+   else -- if thread isn't callable this will break
+      work = create(function(...)
+                       return thread(...)
+                    end)
    end
    local res = pack(resume(work, ...))
    local ok, response, state = res[1], res[2], status(work)

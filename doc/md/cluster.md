@@ -5,7 +5,7 @@
 
 Cluster is the basis for using the LuaJIT runtime in the bridge\-approved
 fashion\.  It succeeds at this, insofar as it will, by respecting the existing
-[philosophy](NO default.domain IN MANIFESTcluster/MISSING_POST_PROJECTdoc/md/.md#philosophy) of the language\.
+[philosophy](https://gitlab.com/special-circumstance/cluster/-/blob/trunk/doc/md/.md#philosophy) of the language\.
 
 
 ## House Style for Cluster
@@ -17,110 +17,6 @@ helm, but absent static analysis tools which are nascent at best, keeping it
 greppable is going to help\. `cluster.ur.pass` is distinctive and we wouldn't
 miss a reference to it if, say, `ur` changed name, however unlikely that
 particular case might be\.
-
-
-## Rationale
-
-  Lua is a minimalist programming language\.  What other dynamic\-interpreted
-languages tend to do with classes, Lua does with hash maps, and a clever
-system which the Lua authors call "metasyntactic extension"\.
-
-Moonscript is an existence proof that one may implement a familiar object
-system in Lua, with good performance and reasonable developer satisfaction\.
-
-Bridge has gone in a different direction\.  One strength of a minimalist
-language is that you only have to pay for what you need\.
-
-Most modules in bridge follow a simple module / instance format, and we
-represent this intention using a simple function called `meta`\.
-
-The basic pattern is to make a table where `tab.__index = tab`, fill this
-table with methods, define `new` to construct an instance with this metatable,
-set `tab.idEst = new`, then return it\.
-
-This gives us the necessary affordances to build, but requires shenanigans to
-do even single inheritance, because we need to instantiate the module to get
-at the metatable in order to extend it\.
-
-Worse, using an `.idEst` slot on the indexed metatable allows for exactly one
-sort of identity\.  I've lampshaded this weakness by using e\.g\.
-`isNode = true` as a 'genus', which is adequate but not actually good;
-continuing to ad\-hoc our way through identity and interface is a recipe for
-pain\.
-
-The goal here is to develop a meta\-object protocol, which allows the user to
-build various rich abstractions, while requiring only minimal changes to the
-80% of modules which returns a function that assigns a metatable\.
-
-
-### Moving Past Single\-Inheritance Through Self Tables
-
-  One pattern which isn't carrying its weight is what we've been calling self
-tables\.  These are the return value of `meta {}`, such that a sequence such
-as:
-
-```lua
-Widget = meta {}
-
--- here we fill the widget table
-
-SubWidget = meta(Widget)
-```
-
-Will\.\.\. usually give expected results\.
-
-
-#### A close reading of core\.cluster\.meta
-
-It's worth looking at the current version of meta\.  We don't have transclusions
-yet, so it's copy and paste, alas\.  This is *mostly* the basis for inheritance
-and instantiation patterns in bridge, although not entirely\.
-
-```lua
-function cluster.meta(Meta)
-   Meta = Meta or {}
-
-   -- decoration
-   if Meta
-      and type(Meta) == 'table'
-      and isempty(Meta) then
-
-      Meta.__index = Meta
-      return Meta
-   end
-
-   -- inheritance
-   if Meta and Meta.__index then
-      local tab = {}
-      for field, value in next, Meta, nil do
-         if sub(field, 1, 2) == "__" then
-            tab[field] = value
-         end
-      end
-      if Meta.__meta then
-         tab.__meta = tab.__meta or {}
-         for _, __ in next, Meta.__meta, nil do
-            tab.__meta[_] = __
-         end
-      end
-      tab.__index = tab
-      return setmeta(tab, Meta)
-   end
-
-   error ("cannot make metatable from type" .. type(Meta))
-end
-```
-
-See that `meta` does the same thing called as `meta()`, and our preferred form
-`meta {}`\. I will argue that this at least is a good pattern\. Instantiation
-of a table without arguments looks nicer in the form `build {}`, and
-`build ()` should have the same behavior\.
-
-The self\-indexing pattern avoids creating a separate index table and metatable,
-which in the simple module\-instance pattern obscures more than it illuminates\.
-
-The statement beginning `if Meta.__meta then` is not currently used anywhere,
-it's a sketch in the direction of an extension of the existing system\.
 
 
 ### Seed, Cassette, Meta
@@ -323,7 +219,11 @@ local function idest(obj, pred)
    return false
 end
 cluster.idest = idest
+```
 
+This will put idest in the global, which we're not doing now\.
+
+```lua
 rawset(getfenv(1), "idest", idest)
 ```
 
@@ -455,7 +355,9 @@ local compose = assert(core.fn.compose)
 local function makeconstructor(builder, meta)
    return function(seed, ...)
       local instance = {}
-      return setmeta(builder(seed, instance, ...), meta)
+      return setmeta(assert(builder(seed, instance, ...),
+                            "builder must return the subject"),
+                     meta)
    end
 end
 
@@ -654,8 +556,18 @@ end
 return cluster
 ```
 
-This represents an early and unstable sketch of Cluster, which we'll continue
+
+# Cluster Postscript
+
+  This represents an early and unstable sketch of Cluster, which we'll continue
 to describe and design below\.
+
+This is an increasingly unwieldy text dump, most of which will end up migrated
+somewhere useful\.
+
+Useful here is also defined by adding more literate programming features, so
+the verbiage can be punctuated with working code\.
+
 
 ## Philosophy
 
@@ -673,6 +585,111 @@ to it\.
 So, as we must, we [tip our hat to Edsger Djikstra](https://www.cs.utexas.edu/users/EWD/ewd08xx/EWD831.PDF), as we dive back into
 the waters of Knuthian programming with Wirthian characteristics\.
 
+## Rationale
+
+  Lua is a minimalist programming language\.  What other dynamic\-interpreted
+languages tend to do with classes, Lua does with hash maps, and a clever
+system which the Lua authors call "metasyntactic extension"\.
+
+Moonscript is an existence proof that one may implement a familiar object
+system in Lua, with good performance and reasonable developer satisfaction\.
+
+Bridge has gone in a different direction\.  One strength of a minimalist
+language is that you only have to pay for what you need\.
+
+Most modules in bridge follow a simple module / instance format, and we
+represent this intention using a simple function called `meta`\.
+
+The basic pattern is to make a table where `tab.__index = tab`, fill this
+table with methods, define `new` to construct an instance with this metatable,
+set `tab.idEst = new`, then return it\.
+
+This gives us the necessary affordances to build, but requires shenanigans to
+do even single inheritance, because we need to instantiate the module to get
+at the metatable in order to extend it\.
+
+Worse, using an `.idEst` slot on the indexed metatable allows for exactly one
+sort of identity\.  I've lampshaded this weakness by using e\.g\.
+`isNode = true` as a 'genus', which is adequate but not actually good;
+continuing to ad\-hoc our way through identity and interface is a recipe for
+pain\.
+
+The goal here is to develop a meta\-object protocol, which allows the user to
+build various rich abstractions, while requiring only minimal changes to the
+80% of modules which returns a function that assigns a metatable\.
+
+
+### Moving Past Single\-Inheritance Through Self Tables
+
+  One pattern which isn't carrying its weight is what we've been calling self
+tables\.  These are the return value of `meta {}`, such that a sequence such
+as:
+
+```lua
+Widget = meta {}
+
+-- here we fill the widget table
+
+SubWidget = meta(Widget)
+```
+
+Will\.\.\. usually give expected results\.
+
+
+#### A close reading of core\.cluster\.meta
+
+It's worth looking at the current version of meta\.  We don't have transclusions
+yet, so it's copy and paste, alas\.  This is *mostly* the basis for inheritance
+and instantiation patterns in bridge, although not entirely\.
+
+```lua
+function cluster.meta(Meta)
+   Meta = Meta or {}
+
+   -- decoration
+   if Meta
+      and type(Meta) == 'table'
+      and isempty(Meta) then
+
+      Meta.__index = Meta
+      return Meta
+   end
+
+   -- inheritance
+   if Meta and Meta.__index then
+      local tab = {}
+      for field, value in next, Meta, nil do
+         if sub(field, 1, 2) == "__" then
+            tab[field] = value
+         end
+      end
+      if Meta.__meta then
+         tab.__meta = tab.__meta or {}
+         for _, __ in next, Meta.__meta, nil do
+            tab.__meta[_] = __
+         end
+      end
+      tab.__index = tab
+      return setmeta(tab, Meta)
+   end
+
+   error ("cannot make metatable from type" .. type(Meta))
+end
+```
+
+See that `meta` does the same thing called as `meta()`, and our preferred form
+`meta {}`\. I will argue that this at least is a good pattern\. Instantiation
+of a table without arguments looks nicer in the form `build {}`, and
+`build ()` should have the same behavior\.
+
+The self\-indexing pattern avoids creating a separate index table and metatable,
+which in the simple module\-instance pattern obscures more than it illuminates\.
+
+The statement beginning `if Meta.__meta then` is not currently used anywhere,
+it's a sketch in the direction of an extension of the existing system\.
+
+
+
 ###  Respect the Runtime
 
   Lua is a carefully designed language, and was chosen carefully by your
@@ -686,9 +703,9 @@ interface\.
 
 #### Meta\-Object Protocol
 
-  One of the attractions of Lua is that it embraces the correct definition ofobject" to use when programming anywhere near the C runtime\.
+  One of the attractions of Lua is that it embraces the correct definition of
+"object" to use when programming anywhere near the C runtime\.
 
-"
 This is more than just a particular layout of memory, pointer references can
 make the instance of a particular object arbitrarily complex, but what an
 object **is** to the C programmer needn't be defined to point out that Lua uses
@@ -743,7 +760,7 @@ backward toward that goal\.
 
 Words and concepts in the glossary are solid enough to define and refer to\.
 
-Everything which is still fluid or tentative is below, in [Concepts](NO default.domain IN MANIFESTcluster/MISSING_POST_PROJECTdoc/md/.md#concepts)\.e
+Everything which is still fluid or tentative is below, in [Concepts](https://gitlab.com/special-circumstance/cluster/-/blob/trunk/doc/md/.md#concepts)\.e
 
 
 ### Field
