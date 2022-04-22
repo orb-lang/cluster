@@ -247,6 +247,25 @@ don't have yet\.
 that we can prefer it over genus for new orders\.
 
 
+#### contract
+
+First fields I need are `boundindex` and `freeindex`\.
+
+A `boundindex` function must be of three arguments, `(Cassette, key, value)`,
+cluster curries the cassette to the index and assigns it, while putting the
+Cassette somewhere where it can be consulted for keys later\.
+
+I think that's just `__meta.keys`, where the contract is that all values are
+ignored, any non\-nil value returns a key, anything in a keys table must have
+only index tables and this will be checked by cluster when building\.
+
+`freeindex` is for index metamethods which do not have a table which is the
+source of truth for indexing, maybe it gives the square of even numbers and
+the cube root of odd ones, we don't care, but we can't look up the keys on
+it and rummaging around looking for the nearest table upvalue is unlikely to
+be of assistance\.
+
+
 ### genus\(family: seed?\)
 
 This either creates or extends a genus\.
@@ -703,9 +722,9 @@ interface\.
 
 #### Meta\-Object Protocol
 
-  One of the attractions of Lua is that it embraces the correct definition of
-"object" to use when programming anywhere near the C runtime\.
+  One of the attractions of Lua is that it embraces the correct definition ofobject" to use when programming anywhere near the C runtime\.
 
+"
 This is more than just a particular layout of memory, pointer references can
 make the instance of a particular object arbitrarily complex, but what an
 object **is** to the C programmer needn't be defined to point out that Lua uses
