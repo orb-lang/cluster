@@ -9,33 +9,59 @@ The brief is necessarily complex, with more than one way to do it\.
 We'll proceed slowly, from primitive types of equality\.
 
 
-### First
+### mold\(use, mention\)
 
-We compare string keys only, and the shape provides type strings only, or
-booleans which must match the truthiness of the field\.
+A mold takes up to two tables, called `use` and `mention`\.
+
+The `use` table is used for its literal shape, we iterate over every key and
+apply these rules based on the value:
+
+
+- If the value is a:
+
+  - string: The subject value must be of type\(subject\) == string\.
+
+  - boolean:  A `true` subject value must be truthy, a `false` subject must
+      be falsy\.
+
+  - table:  The subject value must also be a table, and it is molded against
+      this table, which follows these rules recursively\.
+
+
 
 ```lua
-local function mold(shape)
-  return function(subject)
-     for key, mold in pairs(shape) do
-        local value = subject[key]
-        local valtype = type(value)
-        if value then
-           if mold == false then
-              return nil, "subject contains forbidden key " .. key
-           end
-           if type(mold) == 'string' then
-              if valtype ~= mold then
-                 return nil, "subject " .. key .. " of type " .. valtype
-                             .. " not " .. mold
-              end
-           elseif mold ~= true then
-              return nil , "unsupported mold shape " ..type(mold)
-           end
-        end
-     end
-     return subject
-  end
+local function mold(_use, mention)
+   local function _mold(subject, use)
+      use = use or _use
+      for key, mold in pairs(use) do
+         local value = subject[key]
+         local valtype, moldtype = type(value), type(mold)
+         if value then
+            if mold == false then
+               return nil, "subject contains forbidden key " .. key
+            end
+            if moldtype == 'string' then
+               if valtype ~= mold then
+                  return nil, "subject " .. key .. " of type " .. valtype
+                              .. " not " .. mold
+               end
+            elseif moldtype == 'table' then
+               local molded, why = _mold(value, mold)
+               if not molded then
+                  return nil, why
+               end
+            elseif mold ~= true then
+               return nil , "unsupported mold shape " .. type(mold)
+            end
+         elseif mold == true then
+            return nil, "mandatory field " .. key .. " is missing"
+         end
+      end
+
+      return subject
+   end
+
+   return _mold
 end
 ```
 

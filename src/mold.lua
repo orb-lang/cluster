@@ -15,27 +15,52 @@
 
 
 
-local function mold(shape)
-  return function(subject)
-     for key, mold in pairs(shape) do
-        local value = subject[key]
-        local valtype = type(value)
-        if value then
-           if mold == false then
-              return nil, "subject contains forbidden key " .. key
-           end
-           if type(mold) == 'string' then
-              if valtype ~= mold then
-                 return nil, "subject " .. key .. " of type " .. valtype
-                             .. " not " .. mold
-              end
-           elseif mold ~= true then
-              return nil , "unsupported mold shape " ..type(mold)
-           end
-        end
-     end
-     return subject
-  end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+local function mold(_use, mention)
+   local function _mold(subject, use)
+      use = use or _use
+      for key, mold in pairs(use) do
+         local value = subject[key]
+         local valtype, moldtype = type(value), type(mold)
+         if value then
+            if mold == false then
+               return nil, "subject contains forbidden key " .. key
+            end
+            if moldtype == 'string' then
+               if valtype ~= mold then
+                  return nil, "subject " .. key .. " of type " .. valtype
+                              .. " not " .. mold
+               end
+            elseif moldtype == 'table' then
+               local molded, why = _mold(value, mold)
+               if not molded then
+                  return nil, why
+               end
+            elseif mold ~= true then
+               return nil , "unsupported mold shape " .. type(mold)
+            end
+         elseif mold == true then
+            return nil, "mandatory field " .. key .. " is missing"
+         end
+      end
+
+      return subject
+   end
+
+   return _mold
 end
 
 

@@ -111,8 +111,9 @@ local lazyloader = assert(core.module.lazyloader)
 
 
 
-local cluster = lazyloader {
+local cluster = lazyloader { 'cluster',
                    response = "cluster:response",
+                   mold     = "cluster:mold",
                    -- clade = "cluster:clade",
                    -- G     = "cluster:G",
                 }
@@ -201,7 +202,7 @@ local function idest(obj, pred)
    end
    -- try new-style first
    if type(obj) == 'table' then
-      local _M = getmetatable(obj)
+      local _M = getmeta(obj)
       if _M and is_meta[_M] then
          while _M do
             if _M.__meta.seed == pred then
@@ -281,17 +282,23 @@ cluster.idest = idest
 
 
 
+
+
+
+
+
+
 local pairs = assert(pairs)
 
-local function genus(family)
+local function genus(order)
    local seed, tape, meta = register({}, {}, {})
    meta.__meta = {}
    setmeta(seed, { __index = tape })
-   if family then
-      assert(is_seed[family], "provide constructor to extend genus")
-      local meta_tape = seed_tape[family]
+   if order then
+      assert(is_seed[order], "provide constructor to extend genus")
+      local meta_tape = seed_tape[order]
       setmeta(tape, { __index = meta_tape })
-      local _M = seed_meta[family]
+      local _M = seed_meta[order]
       for k, v in pairs(_M) do
          -- meta we copy
          if k == '__meta' then
@@ -321,6 +328,8 @@ local function order(no_table)
 end
 
 cluster.order = order
+
+
 
 
 
@@ -404,6 +413,9 @@ cluster.construct = construct
 
 
 
+
+
+
 local function extendbuilder(seed, builder)
    assert(is_seed[seed], "#1 to construct must be a seed")
    local meta = assert(seed_meta[seed], "missing metatable for seed")
@@ -411,8 +423,15 @@ local function extendbuilder(seed, builder)
    if not _M then
       error("can't extend a constructor with no inheritance, use construct")
    end
-
    local super_build = assert(_M.__meta.builder, "metatable missing a builder")
+   -- true means reuse the builder
+   if builder == true then
+      meta.__meta.builder = super_build
+      getmeta(seed).__call = makeconstructor(super_build, meta)
+      return
+   end
+   -- we should assert callability here?
+
    local function _build(seed, instance, ...)
       local _inst = super_build(seed, instance, ...)
       return builder(seed, _inst, ...)
