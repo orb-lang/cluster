@@ -376,6 +376,8 @@ cluster.order = order
 
 
 
+
+
 local compose = assert(core.fn.compose)
 
 local function makeconstructor(builder, meta)
@@ -403,6 +405,32 @@ cluster.construct = construct
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+local function create(seed, creator)
+   assert(is_seed[seed], "#1 to construct must be a seed")
+   local meta = assert(seed_meta[seed], "missing metatable for seed!")
+   local function _call(...)
+      return setmeta(assert(creator(...), "creator must return subject"), meta)
+   end
+   meta.__meta.builder = creator
+   getmeta(seed).__call = _call
+end
+
+cluster.create = create
 
 
 
@@ -470,10 +498,9 @@ cluster.extend.builder = extendbuilder
 
 
 
-
-
 local iscallable = assert(core.fn.iscallable)
 local rawget = assert(rawget)
+
 local function super(tape, message, after_method)
    assert(is_tape[tape], "#1 error: cluster.super extends a cassette")
    assert(type(message) == 'string', "#2 must be a string")
@@ -483,17 +510,28 @@ local function super(tape, message, after_method)
       error("cassette already has " .. message)
    end
    local super_method = tape[message]
-   assert(iscallable(super_method))
+   assert(iscallable(super_method), "super method value isn't callable")
    tape[message] = function(_tape, ...)
                       super_method(_tape, ...)
                       return after_method(_tape, ...)
                    end
-
    return;
 end
 
 cluster.super = super
 cluster.extend.super = super
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

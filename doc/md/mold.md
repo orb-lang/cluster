@@ -27,10 +27,22 @@ apply these rules based on the value:
   - table:  The subject value must also be a table, and it is molded against
       this table, which follows these rules recursively\.
 
+We apply `use` completely, including recursion, then move to `mention`\.
+
+
+- Supported fields in mention:
+
+  - just:  This is a key value map, any key must be of that value precisely
+      via equality comparison\.
+
+We will continue this list, the obvious next candidate involves metatables\.
+
 
 
 ```lua
 local function mold(_use, mention)
+   -- break out all mention categories as I write them:
+   local just = mention and mention.just
    local function _mold(subject, use)
       use = use or _use
       for key, mold in pairs(use) do
@@ -55,6 +67,14 @@ local function mold(_use, mention)
             end
          elseif mold == true then
             return nil, "mandatory field " .. key .. " is missing"
+         end
+      end
+
+      if just then
+         for key, value in pairs(just) do
+            if subject[key] ~= value then
+               return nil, "value of " .. key .. " is not " .. tostring(value)
+            end
          end
       end
 

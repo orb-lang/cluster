@@ -217,7 +217,7 @@ coroutine\.
 local resume = assert(coroutine.resume)
 
 function Response.respond(response, ...)
-   s:bore("responding") -- , debug.traceback())
+   local autothread = response.autothread or autothread
    response:pack(...)
    if response.work == response.co then
       return resume(response.co, ...)

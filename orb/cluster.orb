@@ -347,10 +347,12 @@ This being a decorator, it returns nothing.
 #NB We can probably accept just =nil= as a return, since we do have the
 subject, keeping =nil, err= for not-globally-fatal failures to build.
 
+
 **** Signature of builder: builder(seed, instance, ...) -> instance
 
 In order to successfully extend builders, they can neither create the instance
-nor assign it a metatable.
+nor assign it a metatable.  We can and do allow the latter for orders, but
+not genera, via =create= (see below).
 
 The result of calling =construct= is a callable with the signature
 =(seed, ...) -> Instance =, so the builder signature is
@@ -406,6 +408,32 @@ back the metatable when adding the constructor, which is just an opportunity
 to pass the cassette by accident.
 
 
+**** cluster.create(seed, creator)
+
+Sometimes we need to create the instance table ourselves, this is how.
+
+A "builder" and a "creator" only differ while the constructor is under
+construction, they have the same image (return a subject instance without its
+metatable) and the domain difference is only relevant internally.
+
+To put it differently, a creator and a builder are extended identically, and
+this lets us put both on the =.builder= slot.
+
+#!lua
+local function create(seed, creator)
+   assert(is_seed[seed], "#1 to construct must be a seed")
+   local meta = assert(seed_meta[seed], "missing metatable for seed!")
+   local function _call(...)
+      return setmeta(assert(creator(...), "creator must return subject"), meta)
+   end
+   meta.__meta.builder = creator
+   getmeta(seed).__call = _call
+end
+
+cluster.create = create
+#/lua
+
+
 **** extendbuilder(seed, builder)
 
   This performs the 'natural' extension of a builder function, by passing the
@@ -457,23 +485,22 @@ cluster.extend.builder = extendbuilder
 The signature we want is =super(tape):message(after_method)=, but let's
 work our way up.
 
-A MOP will offer a variety of extension protocols, but you'll see a theme,
-which is that of pursuing a general and satisfactory single inheritance which
-survives more than one round of specialization.
-
-This relies on the tape being a reliable source of truth when looking up the
-super method, which we will have to solve eventually. This is at least true
-when we use the bog-standard =__index= chain of tables, and I want to write
-the tricky functionalizing stuff against a need for it.
+The result of calling super is to extend the method at slot =:message= by
+calling the aftermethod after the super method, with the same arguments.
 
 Note that this discards the value of the super method, which is compatible
 with the chaining style and anything else where the return value may be
-recomputed.
+recomputed.  Assigning a method to come after the invocation of a given
+method, one which receives the return values, is conceptually distinct and not
+yet implemented.
 
+It is an error to attempt to extend a method twice, or to extend a method
+which exists on the tape itself, rather than the tape's lookup chain.
 
 #!lua
 local iscallable = assert(core.fn.iscallable)
 local rawget = assert(rawget)
+
 local function super(tape, message, after_method)
    assert(is_tape[tape], "#1 error: cluster.super extends a cassette")
    assert(type(message) == 'string', "#2 must be a string")
@@ -483,12 +510,11 @@ local function super(tape, message, after_method)
       error("cassette already has " .. message)
    end
    local super_method = tape[message]
-   assert(iscallable(super_method))
+   assert(iscallable(super_method), "super method value isn't callable")
    tape[message] = function(_tape, ...)
                       super_method(_tape, ...)
                       return after_method(_tape, ...)
                    end
-
    return;
 end
 
@@ -497,7 +523,19 @@ cluster.extend.super = super
 #/lua
 
 
-*** Cluster .ur methods
+**** Integration with function indices #improve
+
+  The cluster MOP will offer a variety of extension protocols, but you'll see
+a theme, which is that of pursuing a general and satisfactory single
+inheritance which survives more than one round of specialization.
+
+This relies on the tape being a reliable source of truth when looking up the
+super method, which we will have to solve eventually. This is at least true
+when we use the bog-standard =__index= chain of tables, and I want to write
+the tricky functionalizing stuff against a need for it.
+
+
+** Cluster .ur methods
 
 These are primitive functions which provide suitable base-layer behaviors for
 genera.

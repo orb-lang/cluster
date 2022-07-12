@@ -81,7 +81,7 @@ clade.basal = _basal
 #/lua
 
 
-*** clade.phyle(basal)
+*** clade.phyle(basal, onindex?: fn)
 
 Phyle needs to automatically create metatables when indexed, and I should
 probably provide some rational basis for making =Phyle.Table= autocreate a
@@ -99,6 +99,37 @@ clade.phyle = _phyle
 #/lua
 
 
-*** clade(basal, phyle, phyle...)
+*** clade.trait(onindex?: fn)
+
+This returns a generator like 'phyle' but one which creates mixins rather than
+bringing to bear the full metatabular machinery.
+
+These are /applied/ to a clade/phyle, but aren't dependent on them except
+insofar as the clade must have sensible responses to the provided methods.
+
+=onindex= is an opportunity to do more than the default in building up index
+tables.
+
+#!lua
+local function trait_index(mixin, field)
+   mixin[field] = {}
+   return mixin[field]
+end
+
+local trait_M = { __index = trait_index }
+
+function clade.trait(onindex)
+   local _M;
+   if onindex then
+      _M = { __index = onindex }
+   else
+      _M = trait_M
+   end
+   return setmetatable({}, _M)
+end
+#/lua
+
+
+*** clade(basal, phyle, traits: ...)
 
 

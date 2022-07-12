@@ -29,7 +29,18 @@
 
 
 
+
+
+
+
+
+
+
+
+
 local function mold(_use, mention)
+   -- break out all mention categories as I write them:
+   local just = mention and mention.just
    local function _mold(subject, use)
       use = use or _use
       for key, mold in pairs(use) do
@@ -54,6 +65,14 @@ local function mold(_use, mention)
             end
          elseif mold == true then
             return nil, "mandatory field " .. key .. " is missing"
+         end
+      end
+
+      if just then
+         for key, value in pairs(just) do
+            if subject[key] ~= value then
+               return nil, "value of " .. key .. " is not " .. tostring(value)
+            end
          end
       end
 
