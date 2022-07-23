@@ -179,11 +179,15 @@ I'm just adding a quick note that we can call these an =observer= and
 =translator= and make them methodical.
 
 
-** idest(obj, pred)
+** idest(pred, obj)
 
 This is one of, if not the most, pervasive elements of Cluster.
 
-So much so that we globalize it at load time.
+In the near future we make this part of the global environment, which moves it
+to pylon.
+
+*NOTE the argument order*.  This is so we can easily curry =idest= to get a
+specialized test.
 
 This initial implementation does three things:
 
@@ -191,11 +195,12 @@ This initial implementation does three things:
    Warning: we may do cdata detection and use metatype stuff there, at some
    future point.
 
--  If the object is a table, we first try cluster-style single inheritance,
-   falling back on old-school =meta {}= style self tables.
+-  If the object is a table, we check 'cluster inheritance', if not
+
+-  We fall back on old-school =meta {}= style self tables.
 
 #!lua
-local function idest(obj, pred)
+local function idest(pred, obj)
    -- primitive
    if type(pred) == 'string' then
       return type(obj) == pred

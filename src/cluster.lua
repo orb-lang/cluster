@@ -195,7 +195,12 @@ end
 
 
 
-local function idest(obj, pred)
+
+
+
+
+
+local function idest(pred, obj)
    -- primitive
    if type(pred) == 'string' then
       return type(obj) == pred

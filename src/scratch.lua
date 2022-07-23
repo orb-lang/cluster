@@ -39,29 +39,43 @@ end
 
 
 
-local allkeys = assert(core.table.allkeys)
+local allpairs = assert(core.table.allpairs)
 
-local function bones(tab)
+local function bones(tab, limit)
    assert(type(tab) == 'table', 'can only handle tables for now')
    local dupes = {}
-   local function eviscerate(tab)
+   local count;
+   local function eviscerate(tab, depth)
       if dupes[tab] then
          return dupes[tab]
       end
       local new = {}
-      for key, value in allkeys(tab) do
+      dupes[tab] = new
+      for key, value in allpairs(tab) do
          local key_t, val_t = type(key), type(value)
          -- we'll deal with the consequences of key_t someday
          -- for instance trying to collapse the type of the array portion
          -- in some useful cases
          if val_t == 'table' then
-            new[key] = eviscerate(value)
+            if depth and depth > limit then
+               new[key] = val_t
+            elseif depth then
+               new[key] = eviscerate(value, depth + 1)
+            else
+               new[key] = eviscerate(value)
+            end
          else
             new[key] = val_t
          end
       end
+
       -- handle metatable for new and return it
       return new
+   end
+   if limit then
+      return eviscerate(tab, 1)
+   else
+      return eviscerate(tab)
    end
 end
 scratch.bones = bones

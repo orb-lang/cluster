@@ -17,10 +17,15 @@ We also allow =ez.proj()=, giving what we currently call ="proj:proj"= though
 we want to change the database a bit to make ="proj"= the unambiguous short
 form for this.
 
+EZ being all about quick ergonomics, we offer =ez.project.mod ""= to return
+the requisite require string, which I intend to reuse in a linting tool which
+can replace EZ calls in code with the properly-spelled requires.
+
 
 #!lua
 local conn = assert(require "bridge" . modules_conn)
 #/lua
+
 
 **** Project ID table
 

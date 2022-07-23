@@ -39,7 +39,25 @@ that then, and not now, we'll need to add the ability to pass the custom
 threader in the Response instead of autothread.
 
 Meanwhile, this will repeatedly restart nested coroutines when an async
-module yields a Response, and that's why we need it to do.
+module yields a Response, and that's what we need it to do.
+
+
+**** Refinement
+
+There are times when it would be clearer to return a callable, which then
+gets the rest of the arguments:
+
+#!lua #noKnit #example
+autothread.create(threadable)(...)
+--vs
+autothread(threadable, ...)
+#/lua
+
+The forward-compatible way is to make the return value a callable library, a
+useful paradigm for this sort of thing.
+
+This will take some scaffolding to really get right, but I believe this opens
+up the possibility of some sort of middleware?
 
 
 #!lua
@@ -72,6 +90,7 @@ local function autothread(thread, ...)
    return nil
 end
 #/lua
+
 
 #!lua
 return autothread
