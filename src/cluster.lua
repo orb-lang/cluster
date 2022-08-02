@@ -114,6 +114,7 @@ local lazyloader = assert(core.module.lazyloader)
 local cluster = lazyloader { 'cluster',
                    response = "cluster:response",
                    mold     = "cluster:mold",
+                   contract = "cluster:contract",
                    -- clade = "cluster:clade",
                    -- G     = "cluster:G",
                 }

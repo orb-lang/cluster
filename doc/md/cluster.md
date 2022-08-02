@@ -114,6 +114,7 @@ on that later\.
 local cluster = lazyloader { 'cluster',
                    response = "cluster:response",
                    mold     = "cluster:mold",
+                   contract = "cluster:contract",
                    -- clade = "cluster:clade",
                    -- G     = "cluster:G",
                 }
@@ -785,9 +786,9 @@ interface\.
 
 #### Meta\-Object Protocol
 
-  One of the attractions of Lua is that it embraces the correct definition of
-"object" to use when programming anywhere near the C runtime\.
+  One of the attractions of Lua is that it embraces the correct definition ofobject" to use when programming anywhere near the C runtime\.
 
+"
 This is more than just a particular layout of memory, pointer references can
 make the instance of a particular object arbitrarily complex, but what an
 object **is** to the C programmer needn't be defined to point out that Lua uses

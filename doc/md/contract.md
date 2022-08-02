@@ -135,7 +135,7 @@ Returns whether an object is valid to use with a particular syntax\.
 
   We have a helper callable table for constructing these closures\.
 
-  \#Todo maye hasmetamethod a closurizer like hasfield\.
+  \#Todo make hasmetamethod a closurizer like hasfield\.
 
 ```lua
 local hasmetamethod = core.meta.hasmetamethod
