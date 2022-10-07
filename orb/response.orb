@@ -56,8 +56,8 @@ s.verbose = true
   Autothread is our little trick to restart coroutines which come from a
 coroutine nest.
 
-Eventually, we will include the ability to attach another threader to a
-response, to support a richer control flow than autothread.
+We check a =.autothread= field on the Response, which we use if provided,
+defaulting to standard autothread:
 
 #!lua
 local autothread = require "cluster:autothread"
@@ -107,6 +107,9 @@ The handle is attached so that some future system can override autothread with
 a supervising loop which takes care of long-running processes.
 
 We used to pass in the coroutine but there's no advantage in doing this.
+
+The running coroutine is placed at both =.co= and =.work=, since we only need
+to autothread a response if these differ.
 
 #!lua
 local running = assert(coroutine.running)
@@ -166,13 +169,10 @@ I'm leaving it in because, again, it's a chance to look at the response value
 from the callback if things break, and architectures with a lot of coroutines
 and callbacks don't leave lengthy stack traces.
 
-We're left with something which can do two things, and it's only doing one of
-them.  The interesting part is that I'm planning to do the second of these
-things very soon with Valiant, which will return a "response" that gets filled
-in either on the next tick, or whenever it's =:ready=.
-
-I'm wary of doing two superficially unrelated things with one module, just
-because it's capable of it.
+We're left with something which can do two things: restart a gnarly twist of
+async code, and provide some limited introspection from outside if things go
+wrong.  It's also a hook for more complex supervisory behaviors, none
+implemented.
 
 
 *** Producer: :respond
@@ -182,7 +182,7 @@ a callback, then yielding the response immediately.
 
 The goal of the Response protocol is to support two pathways.  The magic
 pathway ignores the response completely and resumes the data returned to the
-callback directly, while the scheduler pathway replaces the Response's
+callback directly, while the autothreaded pathway replaces the Response's
 coroutine with one which will get back down to the callback when =resume=d.
 
 
@@ -200,7 +200,6 @@ ignored by =unpack=, but only sometimes, and never for a table created with
 #!lua
 function Response.pack(response, ...)
    response[1] = pack(...)
-   response.pending = false
    return response
 end
 #/lua
@@ -211,18 +210,17 @@ end
   This combines packing the arguments into the Response and resuming the
 coroutine.
 
-
-
 #!lua
 local resume = assert(coroutine.resume)
 
 function Response.respond(response, ...)
-   local autothread = response.autothread or autothread
+   response.pending = false
+   local thread = response.autothread or autothread
    response:pack(...)
    if response.work == response.co then
       return resume(response.co, ...)
    else
-      return autothread(response.work, ...)
+      return thread(response.work, ...)
    end
 end
 #/lua
@@ -237,7 +235,7 @@ down the resume chain back to the original point of yield.
 This makes it possible to use those async processes in a way which cooperates
 with message passing.
 
-The main consumer interface is therefore replacing the value of =response.co=,
+The main consumer interface is therefore replacing the value of =.work=,
 rather than calling methods.
 
 Two are however available.  =:ready= means the coroutine has resumed with
@@ -272,7 +270,7 @@ function Response.unpack(response)
 end
 #/lua
 
-*** \#Response  #YAGNI
+*** #Response  #YAGNI
 
 Returns the amount of parameters available, which will be 0 until the
 response is =:ready=.

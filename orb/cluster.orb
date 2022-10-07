@@ -101,6 +101,7 @@ local core = require "qor:core"
 local lazyloader = assert(core.module.lazyloader)
 #/lua
 
+
 *** lazy cluster
 
 I'm writing cluster as a mostly-lazy system.
@@ -180,6 +181,50 @@ I'm just adding a quick note that we can call these an =observer= and
 =translator= and make them methodical.
 
 
+** metafor(seed), tapefor(seed)
+
+The seed is the return value from modules, and there are occasions when we
+want the metatable assigned to instances (motivating example is database
+rehydration).
+
+The tape can (usually!) be retrieved manually from the seed, but that's not
+in the contract, the seed exposes "useful fields", and though we don't happen
+to offer affordances for changing what that means yet, we will.  Therefore
+=tapefor=.
+
+It should be the case that the seed is a metonym for the genre in all
+important cases, but clearly we can add more functions if and when we need
+them.
+
+#!lua
+function cluster.metafor(seed)
+   if is_seed[seed] then
+      local M = seed_meta[seed]
+      if M then
+         return M
+      else
+         return nil, "seed has no metatable"
+      end
+   else
+      return nil, "this is not a recognized seed"
+   end
+end
+
+function cluster.tapefor(seed)
+   if is_seed[seed] then
+      local T = seed_tape[seed]
+      if T then
+         return T
+      else
+         return nil, "seed has no tape"
+      end
+   else
+      return nil, "this is not a recognized seed"
+   end
+end
+#/lua
+
+
 ** idest(pred, obj)
 
 This is one of, if not the most, pervasive elements of Cluster.
@@ -198,7 +243,9 @@ This initial implementation does three things:
 
 -  If the object is a table, we check 'cluster inheritance', if not
 
--  We fall back on old-school =meta {}= style self tables.
+-  We fall back on old-school =meta {}= style self tables.  These are
+   deprecated and may be removed; cluster will likely have a way of creating
+   self-tables but it won't use the =.idEst= flag.
 
 #!lua
 local function idest(pred, obj)
@@ -228,6 +275,8 @@ cluster.idest = idest
 
 This will put idest in the global, which we're not doing now.
 
+The Orbwise way to do this is to transclude the code block above into pylon.
+
 #!lua #noKnit
 rawset(getfenv(1), "idest", idest)
 #/lua
@@ -254,21 +303,46 @@ that we can prefer it over genus for new orders.
 
 **** contract
 
-First fields I need are =boundindex= and =freeindex=.
+The contract determines the exception.
+
+
+***** Function indices
+
+  Our sensible default is that an order will have a table index, which is
+identical to the Cassette.  Cluster will handle function indices as well in
+at least two ways: =.boundindex= and =.freeindex=.
 
 A =boundindex= function must be of three arguments, =(Cassette, key, value)=,
 cluster curries the cassette to the index and assigns it, while putting the
 Cassette somewhere where it can be consulted for keys later.
 
-I think that's just =__meta.keys=, where the contract is that all values are
-ignored, any non-nil value returns a key, anything in a keys table must have
-only index tables and this will be checked by cluster when building.
+The Cassette with =boundindex= lives at  =__meta.keys=, where the contract is
+that all values are ignored, any non-nil value returns a key, anything in a
+keys table must have only index tables and this will be checked by cluster
+when building.
 
 =freeindex= is for index metamethods which do not have a table which is the
 source of truth for indexing, maybe it gives the square of even numbers and
 the cube root of odd ones, we don't care, but we can't look up the keys on
 it and rummaging around looking for the nearest table upvalue is unlikely to
-be of assistance.
+be of assistance.  It is unclear what serves as the Cassette under these
+circumstances.
+
+Also an =instruments_may_index= flag, meaning that despite the scary function,
+the keys which end in =__meta.keys= may be applied to that function to get
+a result.  It's a promise of no side-effects.
+
+This isn't a security thing, it's a politeness thing; Lua is nasal demons all
+the way down.
+
+
+***** seedmeta
+
+Normally, the Cassette is assigned to the Seed metatable as the index, as
+well as the index of the metatable proper.
+
+=.seedmeta= can provide a table for this.  This will allow for completely
+custom constructors to be passed in, though that's not the main intention.
 
 
 *** genus(order: seed?, contract)
@@ -297,8 +371,7 @@ the index should be copied rather than looked up in depth.
 local pairs = assert(pairs)
 
 local function genus(order)
-   local seed, tape, meta = register({}, {}, {})
-   meta.__meta = {}
+   local seed, tape, meta = register({}, {}, {__meta = {}})
    setmeta(seed, { __index = tape })
    if order then
       assert(is_seed[order], "provide constructor to extend genus")
@@ -336,22 +409,11 @@ end
 cluster.order = order
 #/lua
 
-
-**** cluster.species(specimen?)
-
-Unwritten, replacement for the =meta {}= pattern.
-
-Called =species= because opportunities for extension are limited.  Will use
-a self-table pattern, but registered with =cluster=, and designed so that a
-species can be promoted to an order without needing to modify user code.
-
-
 *** construct(seed, builder)
 
-This being a decorator, it returns nothing.
-
-#NB We can probably accept just =nil= as a return, since we do have the
-subject, keeping =nil, err= for not-globally-fatal failures to build.
+Before a Cluster order or genus can be used, it *must* be provided with a
+constructor.  Even if the original constructor of a genus is to be reused,
+=extendbuilder= needs to be called with =true=.
 
 
 **** Signature of builder: builder(seed, instance, ...) -> instance
@@ -365,20 +427,22 @@ The result of calling =construct= is a callable with the signature
 =(seed, instance, ...) -> instance=.
 
 The builder *must not* assign a metatable, because the JIT relies on immutable
-table/metatable relationships, and even if it didn't, assigning intermediate
-metatable which are never used is sloppy engineering.
+table/metatable relationships, and even if it didn't, assigning an
+intermediate metatable which is never used is sloppy engineering.
 
 The seed and the metatable have the same index, so it's possible to use
-values from the cassette during building, whether that's a good idea or not.
+values from the cassette during building, whether that's a good idea or not
+(and it can be, as a way to design a more-generic builder which dispatches on
+qualities of genera which may not be known).
 
 The user must bear in mind that selecting slots from the seed means that
 extensions will be able to change the values.  The builder function is
-normally closed over the Cassette (as well as the Seed and Meta) and can
-choose to incorporate those values instead.
+normally defined with all three aspects of an order in scope, making it
+possible to capture values from the base if this is correct.
 
-Cluster takes care of making the builder into a constructor by making the object
-and composing an
-assignment of the metatable with the builder function.
+Cluster takes care of making the builder into a constructor, by making the
+instance table, and composing an assignment of the metatable with the builder
+function.
 
 This separation lets us re-use the builder in specializing a given genus, if
 we want to, without performing the forbidden double-metatable assignment.
@@ -389,9 +453,11 @@ local compose = assert(core.fn.compose)
 local function makeconstructor(builder, meta)
    return function(seed, ...)
       local instance = {}
-      return setmeta(assert(builder(seed, instance, ...),
-                            "builder must return the subject"),
-                     meta)
+      local subject, err = builder(seed, instance, ...)
+      if not subject then
+         error(err or "bulder must return the subject")
+      end
+      return setmeta(subject, meta)
    end
 end
 
@@ -413,14 +479,20 @@ complexity of having three tables floating around.  We don't need to hand
 back the metatable when adding the constructor, which is just an opportunity
 to pass the cassette by accident.
 
+The user doesn't even have to capture the metatable if metamethods aren't
+necessary: ==local new, Widget = cluster.order()== is preferred in that case.
+
 
 **** cluster.create(seed, creator)
 
 Sometimes we need to create the instance table ourselves, this is how.
 
+This is used in e.g. Set and Message, where the content is usually provided
+in a literal table, making a new allocation a waste.
+
 A "builder" and a "creator" only differ while the constructor is under
 construction, they have the same image (return a subject instance without its
-metatable) and the domain difference is only relevant internally.
+metatable) and the differing domain is only relevant internally.
 
 To put it differently, a creator and a builder are extended identically, and
 this lets us put both on the =.builder= slot.
@@ -443,7 +515,7 @@ cluster.create = create
 **** extendbuilder(seed, builder)
 
   This performs the 'natural' extension of a builder function, by passing the
-seed, instance, and all argument, first to the super builder, then to the new
+seed, instance, and all arguments, first to the super builder, then to the new
 builder.
 
 A =true= argument means the original builder is to be reused but the new

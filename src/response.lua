@@ -109,6 +109,9 @@ Response.__index = Response
 
 
 
+
+
+
 local running = assert(coroutine.running)
 
 local function new(handle)
@@ -195,16 +198,10 @@ Response.isResponse = true
 
 
 
-
-
-
 function Response.pack(response, ...)
    response[1] = pack(...)
-   response.pending = false
    return response
 end
-
-
 
 
 
@@ -217,12 +214,13 @@ end
 local resume = assert(coroutine.resume)
 
 function Response.respond(response, ...)
-   local autothread = response.autothread or autothread
+   response.pending = false
+   local thread = response.autothread or autothread
    response:pack(...)
    if response.work == response.co then
       return resume(response.co, ...)
    else
-      return autothread(response.work, ...)
+      return thread(response.work, ...)
    end
 end
 

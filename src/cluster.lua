@@ -111,6 +111,7 @@ local lazyloader = assert(core.module.lazyloader)
 
 
 
+
 local cluster = lazyloader { 'cluster',
                    response = "cluster:response",
                    mold     = "cluster:mold",
@@ -175,6 +176,52 @@ local function register(seed, tape, meta)
    return seed, tape, meta
 end
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+function cluster.metafor(seed)
+   if is_seed[seed] then
+      local M = seed_meta[seed]
+      if M then
+         return M
+      else
+         return nil, "seed has no metatable"
+      end
+   else
+      return nil, "this is not a recognized seed"
+   end
+end
+
+function cluster.tapefor(seed)
+   if is_seed[seed] then
+      local T = seed_tape[seed]
+      if T then
+         return T
+      else
+         return nil, "seed has no tape"
+      end
+   else
+      return nil, "this is not a recognized seed"
+   end
+end
 
 
 
@@ -294,11 +341,37 @@ cluster.idest = idest
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 local pairs = assert(pairs)
 
 local function genus(order)
-   local seed, tape, meta = register({}, {}, {})
-   meta.__meta = {}
+   local seed, tape, meta = register({}, {}, {__meta = {}})
    setmeta(seed, { __index = tape })
    if order then
       assert(is_seed[order], "provide constructor to extend genus")
@@ -375,23 +448,16 @@ cluster.order = order
 
 
 
-
-
-
-
-
-
-
-
-
 local compose = assert(core.fn.compose)
 
 local function makeconstructor(builder, meta)
    return function(seed, ...)
       local instance = {}
-      return setmeta(assert(builder(seed, instance, ...),
-                            "builder must return the subject"),
-                     meta)
+      local subject, err = builder(seed, instance, ...)
+      if not subject then
+         error(err or "bulder must return the subject")
+      end
+      return setmeta(subject, meta)
    end
 end
 
@@ -406,6 +472,12 @@ local function construct(seed, builder)
 end
 
 cluster.construct = construct
+
+
+
+
+
+
 
 
 

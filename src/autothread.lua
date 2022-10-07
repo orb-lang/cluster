@@ -64,9 +64,13 @@
 local create, status = assert(coroutine.create), assert(coroutine.status)
 local yield, resume = assert(coroutine.yield), assert(coroutine.resume)
 
+local bridge = require "bridge"
+
 local function autothreader(thread)
+   -- capture and return the thread
    return function(...)
       local work;
+      bridge.green = 1 -- #TODO check that bridge is truthy and run on block
       if type(thread) == 'thread' then
          work = thread
       elseif type(thread) == 'function' then
@@ -87,7 +91,7 @@ local function autothreader(thread)
       else
          yield(select(2, unpack(res)))
       end
-
+      bridge.green = -1
       return nil
    end
 end
