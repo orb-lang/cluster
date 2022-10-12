@@ -19,7 +19,7 @@ miss a reference to it if, say, =ur= changed name, however unlikely that
 particular case might be.
 
 
-*** Seed, Cassette, Meta
+*** Seed, Tape, Meta
 
   We need a constructor which can double as an identity for any table which is
 specialized from the genus we're defining, as well as a table we can define
@@ -28,14 +28,14 @@ values.  We've handled this with ==new, idEst, and Tab.__index = Tab==, and
 it isn't enough.
 
 The return value we'll call a *Seed*.  This is a table with a call metamethod
-which constructs an instance, and the Cassette as the index metatable, and is
+which constructs an instance, and the Tape as the index metatable, and is
 the return value of our familiar sort of module.  Probably this should be
 read only as well.
 
-The Cassette is a table which is expected to be indexed against /in some way/
+The Tape is a table which is expected to be indexed against /in some way/
 by instances, and in the easy case, this has the usual single inheritance by
 metatable pattern.  It is /not/ a self table, and it is normally but not
-always the =__index= table of the Meta.  The reference is to gene cassettes,
+always the =__index= table of the Meta.  The reference is to gene tapes,
 which if you know what a chromosome is, that's close enough to get the gist.
 
 The Meta is assigned by the constructor to an instance table as the last step
@@ -47,11 +47,11 @@ things in the constructor which are given different meanings by the metatable.
 So a completely blank canvas has these relations:
 
 #!lua #noKnit
-local Seed, Cassette, Meta = setmeta({}, {}), {}, {__meta = {}}
+local Seed, Tape, Meta = setmeta({}, {}), {}, {__meta = {}}
 
-getmeta(Seed).__index = Cassette
+getmeta(Seed).__index = Tape
 
-Meta.__index = Cassette
+Meta.__index = Tape
 
 Meta.__meta.__seed = Seed
 #/lua
@@ -131,7 +131,7 @@ references.
 local weak = assert(core.meta.weak)
 #/lua
 
-Seed, cassette, and meta, have a sort of primitive component type, so cluster
+Seed, tape, and meta, have a sort of primitive component type, so cluster
 will want to be able to tell which it might be dealing with when handed a
 given table.
 
@@ -141,9 +141,9 @@ So we need three weak tables for this purpose:
 local is_seed, is_tape, is_meta = weak 'k', weak 'k', weak 'k'
 #/lua
 
-As a quirk, we call cassettes "tape" inside cluster.  My excuse is that the
-concept map from the cassette-in-itself to the word "cassette" is at least
-translucent, and that cassette-to-tape is also easy enough.  This relies on a
+As a quirk, we call tapes "tape" inside cluster.  My excuse is that the
+concept map from the tape-in-itself to the word "tape" is at least
+translucent, and that tape-to-tape is also easy enough.  This relies on a
 pun, though, and offering it to the user as a Tape would be misleading.
 
 It is, moreover, a long word, and without going full Mencius "Procrustes"
@@ -284,6 +284,17 @@ rawset(getfenv(1), "idest", idest)
 
 ** order, genus, and species
 
+  Rather than fall into the taxonomic fallacy, providing levels and sublevels
+which organize thought rather than reality, we have the concepts of order,
+genus, and species, which are collectively genres.
+
+An order is always a basis, which may be instantiated, and may also be
+extended via =cluster.genus=.  A genre with no further specializations is a
+species; a genus has both generic and specific partners.
+
+An instance of a given genre we refer to as a subject, or instance, but never
+as an object, except in that rare case where we refer to it as a C struct.
+
 
 *** order(contract?)
 
@@ -309,14 +320,14 @@ The contract determines the exception.
 ***** Function indices
 
   Our sensible default is that an order will have a table index, which is
-identical to the Cassette.  Cluster will handle function indices as well in
+identical to the Tape.  Cluster will handle function indices as well in
 at least two ways: =.boundindex= and =.freeindex=.
 
-A =boundindex= function must be of three arguments, =(Cassette, key, value)=,
-cluster curries the cassette to the index and assigns it, while putting the
-Cassette somewhere where it can be consulted for keys later.
+A =boundindex= function must be of three arguments, =(Tape, key, value)=,
+cluster curries the tape to the index and assigns it, while putting the
+Tape somewhere where it can be consulted for keys later.
 
-The Cassette with =boundindex= lives at  =__meta.keys=, where the contract is
+The Tape with =boundindex= lives at  =__meta.keys=, where the contract is
 that all values are ignored, any non-nil value returns a key, anything in a
 keys table must have only index tables and this will be checked by cluster
 when building.
@@ -325,20 +336,35 @@ when building.
 source of truth for indexing, maybe it gives the square of even numbers and
 the cube root of odd ones, we don't care, but we can't look up the keys on
 it and rummaging around looking for the nearest table upvalue is unlikely to
-be of assistance.  It is unclear what serves as the Cassette under these
+be of assistance.  It is unclear what serves as the Tape under these
 circumstances.
 
 Also an =instruments_may_index= flag, meaning that despite the scary function,
-the keys which end in =__meta.keys= may be applied to that function to get
-a result.  It's a promise of no side-effects.
+the keys which end in =__meta.keys= may be applied to that function to get a
+result.  It's a promise of no side-effects.  This isn't a security thing,
+it's a politeness thing; Lua is nasal demons all the way down.
 
-This isn't a security thing, it's a politeness thing; Lua is nasal demons all
-the way down.
+Finally, there's an orthogonal question, which is whether the Tape should be
+made available via inheritance on the Seed.  This is a question Cluster can't
+answer, being pure user intention, and there could be cases where we don't
+attach the Tape to the Seed, even when the Tape serves as an index table.
+
+
+****** implications
+
+We need to achieve the following:
+
+- Index lookup on the seed is still to the tape
+
+- The tape may be extended, and a new closure generated for the index function
+
+- The keys covered by the index function, which are normally the tape but not
+  automatically, need to be exposed, in particular, to helm.
 
 
 ***** seedmeta
 
-Normally, the Cassette is assigned to the Seed metatable as the index, as
+Normally, the Tape is assigned to the Seed metatable as the index, as
 well as the index of the metatable proper.
 
 =.seedmeta= can provide a table for this.  This will allow for completely
@@ -409,6 +435,7 @@ end
 cluster.order = order
 #/lua
 
+
 *** construct(seed, builder)
 
 Before a Cluster order or genus can be used, it *must* be provided with a
@@ -416,7 +443,7 @@ constructor.  Even if the original constructor of a genus is to be reused,
 =extendbuilder= needs to be called with =true=.
 
 
-**** Signature of builder: builder(seed, instance, ...) -> instance
+**** Signature of builder: builder(seed, instance, ...) -> instance, extra
 
 In order to successfully extend builders, they can neither create the instance
 nor assign it a metatable.  We can and do allow the latter for orders, but
@@ -431,7 +458,7 @@ table/metatable relationships, and even if it didn't, assigning an
 intermediate metatable which is never used is sloppy engineering.
 
 The seed and the metatable have the same index, so it's possible to use
-values from the cassette during building, whether that's a good idea or not
+values from the tape during building, whether that's a good idea or not
 (and it can be, as a way to design a more-generic builder which dispatches on
 qualities of genera which may not be known).
 
@@ -447,6 +474,14 @@ function.
 This separation lets us re-use the builder in specializing a given genus, if
 we want to, without performing the forbidden double-metatable assignment.
 
+We return a second value =extra=, for various good reasons.  We already
+collect a second value for error purposes, and it seems rude not to offer that
+value back after assigning the metatable to the first return.
+
+This is all that's needed if a second return value is desireable, and allows
+smuggling anything one would like out in the rare event that more return
+values would be natural.
+
 #!lua
 local compose = assert(core.fn.compose)
 
@@ -454,10 +489,10 @@ local function makeconstructor(builder, meta)
    return function(seed, ...)
       local instance = {}
       local subject, err = builder(seed, instance, ...)
-      if not subject then
+      if subject == nil then
          error(err or "bulder must return the subject")
       end
-      return setmeta(subject, meta)
+      return setmeta(subject, meta), err
    end
 end
 
@@ -477,7 +512,7 @@ cluster.construct = construct
 Here we see how using a local library of weak references can mitigate the
 complexity of having three tables floating around.  We don't need to hand
 back the metatable when adding the constructor, which is just an opportunity
-to pass the cassette by accident.
+to pass the tape by accident.
 
 The user doesn't even have to capture the metatable if metamethods aren't
 necessary: ==local new, Widget = cluster.order()== is preferred in that case.
@@ -498,14 +533,23 @@ To put it differently, a creator and a builder are extended identically, and
 this lets us put both on the =.builder= slot.
 
 #!lua
+local function makecreator(creator, meta)
+   return function(...)
+      local subject, err = creator(...)
+      if subject == nil then
+         error(err or "creator must return subject")
+      end
+      return setmeta(subject, meta), err
+   end
+end
+
 local function create(seed, creator)
    assert(is_seed[seed], "#1 to construct must be a seed")
    local meta = assert(seed_meta[seed], "missing metatable for seed!")
-   local function _call(...)
-      return setmeta(assert(creator(...), "creator must return subject"), meta)
-   end
+
    meta.__meta.builder = creator
-   getmeta(seed).__call = _call
+   meta.__meta.builder_creates_instance = true
+   getmeta(seed).__call = makecreator(creator, meta)
 end
 
 cluster.create = create
@@ -521,6 +565,10 @@ builder.
 A =true= argument means the original builder is to be reused but the new
 metatable applied.
 
+This clobbers any second return value from the generic builder, but will
+provide the specific one if any.  I don't see an easy way around that, and if
+it comes time to write a hard one, I'll know.
+
 #!lua
 local function extendbuilder(seed, builder)
    assert(is_seed[seed], "#1 to construct must be a seed")
@@ -530,21 +578,30 @@ local function extendbuilder(seed, builder)
       error("can't extend a constructor with no inheritance, use construct")
    end
    local super_build = assert(_M.__meta.builder, "metatable missing a builder")
+   local created = _M.__meta.builder_creates_instance
+   local maker = created
+                 and makecreator
+                 or makeconstructor
    -- true means reuse the builder
    if builder == true then
       meta.__meta.builder = super_build
-      getmeta(seed).__call = makeconstructor(super_build, meta)
+      getmeta(seed).__call = maker(super_build, meta)
       return
    end
    -- we should assert callability here?
+   local function _build_create(seed, ...)
+      local _inst = super_build(seed, ...)
+      return builder(seed, _inst, ...)
+   end
 
-   local function _build(seed, instance, ...)
+   local function _build_extend(seed, instance, ...)
       local _inst = super_build(seed, instance, ...)
       return builder(seed, _inst, ...)
    end
-   meta.__meta.builder = _build
 
-   getmeta(seed).__call = makeconstructor(_build, meta)
+   meta.__meta.builder = created and _build_create or _build_extend
+   getmeta(seed).__call = maker(_build, meta)
+   meta.__meta.builder_creates_instace = created
 end
 
 cluster.extendbuilder = extendbuilder
@@ -580,12 +637,12 @@ local iscallable = assert(core.fn.iscallable)
 local rawget = assert(rawget)
 
 local function super(tape, message, after_method)
-   assert(is_tape[tape], "#1 error: cluster.super extends a cassette")
+   assert(is_tape[tape], "#1 error: cluster.super extends a tape")
    assert(type(message) == 'string', "#2 must be a string")
    assert(iscallable(after_method), "#3 must be callable")
    -- let's prevent this happening twice
    if rawget(tape, message) then
-      error("cassette already has " .. message)
+      error("tape already has " .. message)
    end
    local super_method = tape[message]
    assert(iscallable(super_method), "super method value isn't callable")

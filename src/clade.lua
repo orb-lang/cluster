@@ -89,19 +89,22 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
 local core, cluster = use ("qor:core", "cluster:cluster")
 local table, string, fn = core.table, core.string, core.fn
 
 
 
-
-
-
-
-
-
-local Clade, Clade_M = {}, {}
-setmetatable(Clade, Clade_M)
+local new, Clade = cluster.order()
 
 
 
@@ -130,11 +133,42 @@ local _clade = weak 'kv'
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 local function specializer(tape, field)
    if not string(field) then return nil end
    local clade = _clade[tape]
    local seed = assert(clade.seed[1], "clade is missing basis seed")
    local new, Phyle, Phyle_M = cluster.genus(seed)
+   -- #note might want to defer this until :coalesce
    cluster.extendbuilder(new, true)
    clade.seed[field] = new
    clade.tape[field] = Phyle
@@ -145,42 +179,112 @@ end
 
 
 
+
+
 local prepose = assert(fn.prepose)
 
-function Clade_M.__call(_Clade, seed, postindex)
+cluster.construct(new, function(new, clade,  seed, postindex)
    local tape, meta = cluster.tapefor(seed), cluster.metafor(seed)
    local __index = postindex
                    and prepose(specializer, postindex)
                    or specializer
-   local clade = {}
-   clade.tape = setmetatable({}, { __index = __index })
+   clade.tape = setmetatable({tape}, { __index = __index })
+   -- memoize just what we use, right now, that's the tape, only
+   _clade[clade.tape] = clade
+   clade.seed, clade.meta = {seed}, {meta}
+   clade.quality, clade.trait, clade.vector = {}, {}, {}
+
+   return clade
+end)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+function Clade.coalesce(clade)
+   -- I should write Byron 0.1 for the destructuring alone
+   local seed, tape, trait, quality, vector = clade.seed,
+                                              clade.tape,
+                                              clade.trait,
+                                              clade.quality,
+                                              clade.vector
+   -- apply qualia
+   for Q, set in pairs(quality) do
+      for tag in pairs(set) do
+         if not seed[tag] then
+            return nil, "Clade has no phyle " .. tag .. " for quality " .. Q
+         end
+         tape[elem][Q] = true
+      end
+   end
+   -- traits with collision detection
+   for T, impl in pairs(trait) do
+      local qual = quality[T]
+      if not qual then
+         return nil, "Trait " .. T .. " has no corresponding quality"
+      end
+      -- these are canonically message and method but we don't actually care
+      for message, method in pairs(impl) do
+         for tag in pairs(qual) do
+            local phyle = tape[tag]
+            -- handle collisions here
+            tape[tag][message] = method
+         end
+      end
+      for message, impl in pairs(vector) do
+         for tag, method in pairs(impl) do
+            if not seed[tag] then
+               return nil, "No phyle " .. tag .. " for vector " .. message
+            end
+            -- collisions here are okay but we should notice it
+            tape[tag][message] = method
+         end
+      end
+   end
+
    return clade
 end
 
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-return Clade
+return new
 

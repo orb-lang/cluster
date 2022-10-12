@@ -368,6 +368,32 @@ cluster.idest = idest
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 local pairs = assert(pairs)
 
 local function genus(order)
@@ -448,16 +474,25 @@ cluster.order = order
 
 
 
+
+
+
+
+
+
+
+
+
 local compose = assert(core.fn.compose)
 
 local function makeconstructor(builder, meta)
    return function(seed, ...)
       local instance = {}
       local subject, err = builder(seed, instance, ...)
-      if not subject then
+      if subject == nil then
          error(err or "bulder must return the subject")
       end
-      return setmeta(subject, meta)
+      return setmeta(subject, meta), err
    end
 end
 
@@ -498,17 +533,30 @@ cluster.construct = construct
 
 
 
+local function makecreator(creator, meta)
+   return function(...)
+      local subject, err = creator(...)
+      if subject == nil then
+         error(err or "creator must return subject")
+      end
+      return setmeta(subject, meta), err
+   end
+end
+
 local function create(seed, creator)
    assert(is_seed[seed], "#1 to construct must be a seed")
    local meta = assert(seed_meta[seed], "missing metatable for seed!")
-   local function _call(...)
-      return setmeta(assert(creator(...), "creator must return subject"), meta)
-   end
+
    meta.__meta.builder = creator
-   getmeta(seed).__call = _call
+   meta.__meta.builder_creates_instance = true
+   getmeta(seed).__call = makecreator(creator, meta)
 end
 
 cluster.create = create
+
+
+
+
 
 
 
@@ -530,21 +578,30 @@ local function extendbuilder(seed, builder)
       error("can't extend a constructor with no inheritance, use construct")
    end
    local super_build = assert(_M.__meta.builder, "metatable missing a builder")
+   local created = _M.__meta.builder_creates_instance
+   local maker = created
+                 and makecreator
+                 or makeconstructor
    -- true means reuse the builder
    if builder == true then
       meta.__meta.builder = super_build
-      getmeta(seed).__call = makeconstructor(super_build, meta)
+      getmeta(seed).__call = maker(super_build, meta)
       return
    end
    -- we should assert callability here?
+   local function _build_create(seed, ...)
+      local _inst = super_build(seed, ...)
+      return builder(seed, _inst, ...)
+   end
 
-   local function _build(seed, instance, ...)
+   local function _build_extend(seed, instance, ...)
       local _inst = super_build(seed, instance, ...)
       return builder(seed, _inst, ...)
    end
-   meta.__meta.builder = _build
 
-   getmeta(seed).__call = makeconstructor(_build, meta)
+   meta.__meta.builder = created and _build_create or _build_extend
+   getmeta(seed).__call = maker(_build, meta)
+   meta.__meta.builder_creates_instace = created
 end
 
 cluster.extendbuilder = extendbuilder
@@ -580,12 +637,12 @@ local iscallable = assert(core.fn.iscallable)
 local rawget = assert(rawget)
 
 local function super(tape, message, after_method)
-   assert(is_tape[tape], "#1 error: cluster.super extends a cassette")
+   assert(is_tape[tape], "#1 error: cluster.super extends a tape")
    assert(type(message) == 'string', "#2 must be a string")
    assert(iscallable(after_method), "#3 must be callable")
    -- let's prevent this happening twice
    if rawget(tape, message) then
-      error("cassette already has " .. message)
+      error("tape already has " .. message)
    end
    local super_method = tape[message]
    assert(iscallable(super_method), "super method value isn't callable")

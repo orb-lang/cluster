@@ -1,72 +1,60 @@
 # Clade
 
+  Clades are a cluster protocol for creating a family of related metatables,
+one where the members may not be known in advance\.
 
-  This is gonna be fun\!
-
-
-## Motive
-
-In Espalier, we build the behaviors of our parsed data out of Nodes\.
-
-It's characteristic to have a base class for a given Grammar, and hand roll
-a bunch of extensions of it, then return a table of metatables\.
-
-If a class isn't shadowed by a table, then it inherits from the base class,
-which we put at `[1]` in the table\.
-
-A Clade is a way of doing this which solves the problems with how I have
-been doing this\.
-
-Namely:
+The motive is working with syntax trees, which are our primary subject of
+focus in bridge\.
 
 
-#### Verbosity
+## Structure
 
-I shouldn't need to define the subfields of a clade explicitly, just start
-assigning behaviors to it and get to work\.
+  Inheritance is normally bespoke, as is the subsequent relationship between
+related species\.  In clade, we generate a whole named collection of
+descendants, known as phyles, which the clade maintains as a single structure\.
 
+Clade being part of cluster, a clade is based on a single cluster genus, which
+we refer to as the basis\.  This genus is created by the author, and the seed
+passed to clade, which returns a clade\.
 
-#### Nonlocality
+One way in which clades differ from ordinary genera is that their name is an
+essential part of their identity\.  Cluster will provide a protocol for
+associating names with genres, but normally the naming convention is just that,
+a convention\.
 
-I have to either split the tables up into modules or cram them all into one
-place\.
-
-What I want to do is specify the specializations of a given method as a
-cassette which I can add to the clade, so that something like `:toLua` lives
-in one place\.
-
-Some of these 'metatables' are entire Grammars, and do belong in their own
-file\.  This means clades need to be constructable from discrete modules,
-and we should do this without circular requiring squads or lazy loading\.
+The phyla of a given clade are organized by name, which we call a 'tag'\.
 
 
-## Clade
+### The Clade Table
 
-Clades need the same seed/tape/metas triplet as orders do, but it behooves us
-to keep them together in one table\.
+Within the clade, each phylum is an ordinary clusder genre, specific to the
+order/genus which is its basis\.
 
-The straightforward way to do this is simply to return a table with `seed`,
-`tape`, and `meta` fields\.  So that's what we're going to do\.
+Since each genre is a triplet of seed, tape, and meta, the clade has fields
+`seed`, `tape`, and `meta`, following our usual convention of key/value maps
+being in the singular\.
 
-This is probably not all the fields, since we have traits to reckon with, and
-vectors\.
+The basis is found at `[1]` on each of those fields\.
 
-I'll probably make operations on the clade functions of the Clade table,
-rather than giving Clade's methods which is a bit of a smell given that any
-Clade manipulation should be at 'load time', a concept which is admittedly
-underdefined\.
+The tape is special, because we allow it to create a new genus when indexed\.
+So we return the tape after the clade, for ergonomic reasons\.
 
-In fact, let's talk a bit about that vocabulary\.
+In addition to phyla, which are based on ordinary specialization aka
+inheritance, clades have a system for disciplined composition of cross\-cutting
+concerns\.
+
+These are provided with three more tables, on slots `quality`, `trait`, and
+`vector`\.
 
 
-#### Qualia, Traits, and Vectors
+### Qualia, Traits, and Vectors
 
-Qualia are how we provide cross\-cutting categories within a clade\.
+Qualia are simply named features which phyla have in common\.
 
-This is a map of strings to a set of phyla, we call these strings 'traits',
-the names of phyla we call 'tags' a la XML\.
+The `quality` slot carries a map of symbols to a set of phylum tags, the keys
+of which we call traits\.
 
-Traits and tags share a namespace in the clade; a string must be one or the
+Traits and tags share a namespace in the clade; a symbol must be one or the
 other\.
 
 If qualia map traits to tags, what are traits?  They map to additional state,
@@ -75,7 +63,8 @@ canonically methods, which apply to every tag with that quality\.
 Vectors are named collections of additional state, think of them as
 inside\-out phyla\.  The name of the *method* maps to a table where the tag or
 trait is the key, and the value is to be assigned to the vector key on phyla
-with that tag or trait\.
+with that tag or trait\.  So we might have `vector.toJson.record`,
+`vector.toJson.protocol`, and so on\.
 
 These can be used for code organization, conditional/lazy construction, and
 as mixins to phyla with no protocol connection to one another\.
@@ -84,6 +73,27 @@ Any vector may have a base implementation at `[1]`\.  Similarly, a trait may
 have a base implementation at `[1]`, so that e\.g\. `clade.trait.literal.report`
 can have an implementation for all phyles as `clade.trait[1].report`\.
 
+Neither the vector table nor the qualia table themselves should have values at
+`[1]`, there being no sensible interpretation of either\.
+
+
+#### Vectors and Mixins
+
+The way vectors are stored is correct for the application, but weird for Lua\.
+
+We end up where `vec.someMethod.tag` is called as `tag:someMethod()`, which is
+fine, in a sense\.  It's the sort of thing which can be taught to a code
+analysis tool only with difficulty\.
+
+It may behoove me to offer a mixin concept, so that a mixin can be composed in
+the familiar way, then inverted into vectors\.
+
+Let's get the core right first\.
+
+
+## Clade
+
+Clade itself is an ordinary cluster order\.
 
 
 #### imports
@@ -93,15 +103,8 @@ local core, cluster = use ("qor:core", "cluster:cluster")
 local table, string, fn = core.table, core.string, core.fn
 ```
 
-
-## Clade
-
-  This module is a callable table, so that we can present the clade API in the
-same instance as the constructor\.
-
 ```lua
-local Clade, Clade_M = {}, {}
-setmetatable(Clade, Clade_M)
+local new, Clade = cluster.order()
 ```
 
 
@@ -116,7 +119,7 @@ local _clade = weak 'kv'
 ```
 
 
-### Clade\(seed: Seed, onindex: fn\(tab:t, field\): t\): Clade
+### Clade\(seed: Seed, onindex: fn\(tab:t, field\): t\): c: Clade, c\.tape
 
 Creates and returns a clade from a given seed\.
 
@@ -124,10 +127,40 @@ The order is created separately, because it provides the root of lookup for
 everything else, and it's quite normal to assign methods and the like to this
 tape\.
 
+Note that indexing other tables in the clade will not do things automagically\.
+
+This will surely end up with a cfg table, and it's not clear that `onindex` is
+so special as to deserve its position, rather than being one field of the
+config\.
+
+
+#### configuration notes
+
+  We'll fairly quickly reach a situation where we need to provide a different
+builder for some phyla\.  The switch to having builders, rather than detecting
+whether a meta is a function or table then calling or assigning, simplifies
+the case of subgrammars, but it means having a system to keep cluster's
+bookkeeping accurate\.
+
+Cluster is built so that slots aren't written twice in 'normal' use, which is
+why the builder must be extended manually \(though there's room for a verb
+which does this for us\)\.
+
+It's a losing proposition to insist on never writing to a slot more than once,
+however\.  The part we need is the cluster operation which assures that
+`__meta` has accurate information\.
+
+The config table might have a `defer_builder` slot, with a set of phyle tags
+where the builder should be left blank\.
+
+Another option is to defer all builders other than the basis until
+coalescence, which I'm liking more as I think about it\.
+
+
 #### specialize on index
 
 The tape automatically produces genera when indexed upon, which we distribute
-across the three collections\.
+across the three collections\.  This returns the tape of the phyle\.
 
 ```lua
 local function specializer(tape, field)
@@ -135,6 +168,7 @@ local function specializer(tape, field)
    local clade = _clade[tape]
    local seed = assert(clade.seed[1], "clade is missing basis seed")
    local new, Phyle, Phyle_M = cluster.genus(seed)
+   -- #note might want to defer this until :coalesce
    cluster.extendbuilder(new, true)
    clade.seed[field] = new
    clade.tape[field] = Phyle
@@ -144,43 +178,113 @@ end
 ```
 
 
+### Clade\(\)
+
 ```lua
 local prepose = assert(fn.prepose)
 
-function Clade_M.__call(_Clade, seed, postindex)
+cluster.construct(new, function(new, clade,  seed, postindex)
    local tape, meta = cluster.tapefor(seed), cluster.metafor(seed)
    local __index = postindex
                    and prepose(specializer, postindex)
                    or specializer
-   local clade = {}
-   clade.tape = setmetatable({}, { __index = __index })
+   clade.tape = setmetatable({tape}, { __index = __index })
+   -- memoize just what we use, right now, that's the tape, only
+   _clade[clade.tape] = clade
+   clade.seed, clade.meta = {seed}, {meta}
+   clade.quality, clade.trait, clade.vector = {}, {}, {}
+
+   return clade
+end)
+```
+
+
+### Clade:coalesce\(\)
+
+  Coalescence is when we verify everything is kosher and build the final form
+of the Clade\.  It's a general cluster concept we haven't added yet, because we
+don't actually use deep or complex inheritance very much at all\.
+
+The idea is that lookup is resolved down to a single level of depth \(when
+possible\), while maintaining the actual cluster contractin the metametatable\.
+
+For clades, the assembly of the clade involves resolving all the various
+moving parts into a collection of metatables and their builders which reflects
+the full structure\.
+
+This might actually return `clade.seed, clade.tape, clade.meta`, or new tables
+which serve that function \(?\)\.
+
+Some unanswered questions here about conditional vector inclusion and identity
+on various transforms, what should be mutable and what shouldn't, it gets
+wacky
+
+Specifically, traits and vectors can override state on a phylum, which is not
+our intended use for either\.  We don't want to forbid it, but it behooves us
+to detect the condition, since it would frequently represent an error\.
+
+Traits can also be self\-contradictory\.  If two qualia have a non\-empty
+intersection, defining a trait with the same name for both qualia could result
+in one or the other assigned to the phyla in the intersection, depending on
+iteration order of the trait application\.  Detecting this with acceptable
+complexity is going to be tricky\.
+
+We can't have that, so we need to detect this during coalescence and throw an
+error\.  This unambiguously represents an error in the model\.
+
+It's probably the case that overriding a phyle's tape with a trait is also a
+bug, but not as necessarily so\.  With vectors it might be the intention\.
+
+The most conservative thing to do is make all three cases an error, and allow
+trait and vector overrides with configuration\.
+
+```lua
+function Clade.coalesce(clade)
+   -- I should write Byron 0.1 for the destructuring alone
+   local seed, tape, trait, quality, vector = clade.seed,
+                                              clade.tape,
+                                              clade.trait,
+                                              clade.quality,
+                                              clade.vector
+   -- apply qualia
+   for Q, set in pairs(quality) do
+      for tag in pairs(set) do
+         if not seed[tag] then
+            return nil, "Clade has no phyle " .. tag .. " for quality " .. Q
+         end
+         tape[elem][Q] = true
+      end
+   end
+   -- traits with collision detection
+   for T, impl in pairs(trait) do
+      local qual = quality[T]
+      if not qual then
+         return nil, "Trait " .. T .. " has no corresponding quality"
+      end
+      -- these are canonically message and method but we don't actually care
+      for message, method in pairs(impl) do
+         for tag in pairs(qual) do
+            local phyle = tape[tag]
+            -- handle collisions here
+            tape[tag][message] = method
+         end
+      end
+      for message, impl in pairs(vector) do
+         for tag, method in pairs(impl) do
+            if not seed[tag] then
+               return nil, "No phyle " .. tag .. " for vector " .. message
+            end
+            -- collisions here are okay but we should notice it
+            tape[tag][message] = method
+         end
+      end
+   end
+
    return clade
 end
 ```
 
 
-## Rest of the Owl Goes Here
-
-
-### clade\.phyle\(basis, onindex?: fn\)
-
-
-
-### clade\.trait\(basis,onindex?: fn\)
-
-This returns a generator like 'phyle' but one which creates mixins, rather than
-bringing to bear the full metatabular machinery\.
-
-These are *applied* to a clade/phyle, but aren't dependent on them except
-insofar as the clade must have sensible responses to the provided methods\.
-
-`onindex` is an opportunity to do more than the default in building up index
-tables\.  It should probably compose to `trait_index`, not replace it, but
-that's something to test when we use it\.
-
-
-#### Onward
-
 ```lua
-return Clade
+return new
 ```
