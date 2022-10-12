@@ -62,7 +62,7 @@ In a real program this will look more like any other day at the widget
 factory:
 
 #!lua #noKnit #Example
-local new, Widget, Widget_M = cluster.genus()
+local new, Widget, Widget_M = cluster.order()
 #/lua
 
 After which Widget is assigned the usual collection of methods and base
@@ -298,23 +298,46 @@ as an object, except in that rare case where we refer to it as a C struct.
 
 *** order(contract?)
 
-This is a refactor, because I did the simpler thing and made =genus= itself
-nullable.
+  Cluster, in keeping with Lua's philosophy, has no equivalent of a root
+object common to the system.  It is a protocol, not an ontology.
 
-And I might keep that, because the idea that an empty order does what genus
-does right now if called with no arguments is valid.
-
-The idea here is that calling order with a table (or it might be a function)
-will configure it according to the Cluster /contract/, which is a thing we
-don't have yet.
-
-=order= will come first, but our initial definition will forbid an argument so
-that we can prefer it over genus for new orders.
+A basis genre is defined with =cluster.order=, which takes an optional
+contract.
 
 
 **** contract
 
 The contract determines the exception.
+
+When mature, all operations and variations within cluster will be available
+by contract.  For example, a field =construct= on the contract will expect
+the same value as the second argument of =cluster.construct=.
+
+This is a good convention and might end up part of the protocol: aspects of
+the contract which /can/ be applied later, are make available via the same
+name on cluster, with the seed as the first argument.
+
+
+***** Function Seeds
+
+By convention, we make the seed a callable table.
+
+This is the most useful default: it gives access to the Tape, from both the
+return value, and during construction.  When this is useful, we're happy about
+it, and it otherwise stays out of the way.  The convention of calling the
+Tape =Widget= and the seed =new=, returning the seed, and calling that same
+object =Widget= in another module, is justified in being generally able to
+index the same values on the Seed and Tape.
+
+It's not a requirement, and there are cases where we want the builder to be
+an ordinary function.
+
+The slot =cfg.fn_seed= tells Cluster to use that function as the builder,
+wrapping it in a closure which sets the appropriate metatable.  This, and
+not a table, is registered and returned as the Seed.
+
+This has implications, the most important being that Cluster needs to avoid
+trying to index the Seed, and must check type if it wants to do that.
 
 
 ***** Function indices
@@ -396,12 +419,14 @@ the index should be copied rather than looked up in depth.
 #!lua
 local pairs = assert(pairs)
 
-local function genus(order)
-   local seed, tape, meta = register({}, {}, {__meta = {}})
-   setmeta(seed, { __index = tape })
+local function genus(order, contract)
    if order then
-      assert(is_seed[order], "provide constructor to extend genus")
       local meta_tape = seed_tape[order]
+      if not meta_tape then
+         return nil, "provide seed to extend genus"
+      end
+      local seed, tape, meta = register({}, {}, {__meta = {}})
+      setmeta(seed, { __index = tape })
       setmeta(tape, { __index = meta_tape })
       local _M = seed_meta[order]
       for k, v in pairs(_M) do
@@ -415,10 +440,12 @@ local function genus(order)
          end
       end
       meta.__meta.meta = _M -- ... yep.
+      meta.__index = tape
+      meta.__meta.seed = seed
+      return seed, tape, meta
+   else
+      return nil, "genus must be called on an existing genre/order"
    end
-   meta.__index = tape
-   meta.__meta.seed = seed
-   return seed, tape, meta
 end
 
 cluster.genus = genus
@@ -426,10 +453,11 @@ cluster.genus = genus
 
 #!lua
 local function order(no_table)
-   if no_table then
-      error "calling cluster.order with a contract is NYI"
-   end
-   return genus()
+   local seed, tape, meta = register({}, {}, {__meta = {}})
+   setmeta(seed, { __index = tape })
+   meta.__index = tape
+   meta.__meta.seed = seed
+   return seed, tape, meta
 end
 
 cluster.order = order
@@ -589,19 +617,22 @@ local function extendbuilder(seed, builder)
       return
    end
    -- we should assert callability here?
-   local function _build_create(seed, ...)
-      local _inst = super_build(seed, ...)
-      return builder(seed, _inst, ...)
+   local _build;
+   if created then
+      _build = function(seed, ...)
+         local _inst = super_build(seed, ...)
+         return builder(seed, _inst, ...)
+      end
+   else
+      _build = function (seed, instance, ...)
+         local _inst = super_build(seed, instance, ...)
+         return builder(seed, _inst, ...)
+      end
    end
 
-   local function _build_extend(seed, instance, ...)
-      local _inst = super_build(seed, instance, ...)
-      return builder(seed, _inst, ...)
-   end
-
-   meta.__meta.builder = created and _build_create or _build_extend
+   meta.__meta.builder = _build
    getmeta(seed).__call = maker(_build, meta)
-   meta.__meta.builder_creates_instace = created
+   meta.__meta.builder_creates_instance = created
 end
 
 cluster.extendbuilder = extendbuilder

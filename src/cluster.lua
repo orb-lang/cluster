@@ -394,14 +394,39 @@ cluster.idest = idest
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 local pairs = assert(pairs)
 
-local function genus(order)
-   local seed, tape, meta = register({}, {}, {__meta = {}})
-   setmeta(seed, { __index = tape })
+local function genus(order, contract)
    if order then
-      assert(is_seed[order], "provide constructor to extend genus")
       local meta_tape = seed_tape[order]
+      if not meta_tape then
+         return nil, "provide seed to extend genus"
+      end
+      local seed, tape, meta = register({}, {}, {__meta = {}})
+      setmeta(seed, { __index = tape })
       setmeta(tape, { __index = meta_tape })
       local _M = seed_meta[order]
       for k, v in pairs(_M) do
@@ -415,10 +440,12 @@ local function genus(order)
          end
       end
       meta.__meta.meta = _M -- ... yep.
+      meta.__index = tape
+      meta.__meta.seed = seed
+      return seed, tape, meta
+   else
+      return nil, "genus must be called on an existing genre/order"
    end
-   meta.__index = tape
-   meta.__meta.seed = seed
-   return seed, tape, meta
 end
 
 cluster.genus = genus
@@ -426,10 +453,11 @@ cluster.genus = genus
 
 
 local function order(no_table)
-   if no_table then
-      error "calling cluster.order with a contract is NYI"
-   end
-   return genus()
+   local seed, tape, meta = register({}, {}, {__meta = {}})
+   setmeta(seed, { __index = tape })
+   meta.__index = tape
+   meta.__meta.seed = seed
+   return seed, tape, meta
 end
 
 cluster.order = order
@@ -589,19 +617,22 @@ local function extendbuilder(seed, builder)
       return
    end
    -- we should assert callability here?
-   local function _build_create(seed, ...)
-      local _inst = super_build(seed, ...)
-      return builder(seed, _inst, ...)
+   local _build;
+   if created then
+      _build = function(seed, ...)
+         local _inst = super_build(seed, ...)
+         return builder(seed, _inst, ...)
+      end
+   else
+      _build = function (seed, instance, ...)
+         local _inst = super_build(seed, instance, ...)
+         return builder(seed, _inst, ...)
+      end
    end
 
-   local function _build_extend(seed, instance, ...)
-      local _inst = super_build(seed, instance, ...)
-      return builder(seed, _inst, ...)
-   end
-
-   meta.__meta.builder = created and _build_create or _build_extend
+   meta.__meta.builder = _build
    getmeta(seed).__call = maker(_build, meta)
-   meta.__meta.builder_creates_instace = created
+   meta.__meta.builder_creates_instance = created
 end
 
 cluster.extendbuilder = extendbuilder

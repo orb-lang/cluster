@@ -119,7 +119,7 @@ local _clade = weak 'kv'
 ```
 
 
-### Clade\(seed: Seed, onindex: fn\(tab:t, field\): t\): c: Clade, c\.tape
+### Clade\(seed: Seed, cfg?: t\): c: Clade, c\.tape
 
 Creates and returns a clade from a given seed\.
 
@@ -157,23 +157,37 @@ Another option is to defer all builders other than the basis until
 coalescence, which I'm liking more as I think about it\.
 
 
+##### cfg\.seed\_fn
+
+  In Node, we need the builder to be a function, because a table gets filled
+with captures without checking for callability first\.
+
+This can be dealt with by wrapping the seed in a function, but we have no use
+for the first step, where we make a builder and attach it to the seed table\.
+
+Node metatable assignment is one of the hottest loops we have, and while the
+JIT may fix our mistake, we prefer not to make it\.
+
+
 #### specialize on index
 
 The tape automatically produces genera when indexed upon, which we distribute
 across the three collections\.  This returns the tape of the phyle\.
 
 ```lua
-local function specializer(tape, field)
-   if not string(field) then return nil end
-   local clade = _clade[tape]
-   local seed = assert(clade.seed[1], "clade is missing basis seed")
-   local new, Phyle, Phyle_M = cluster.genus(seed)
-   -- #note might want to defer this until :coalesce
-   cluster.extendbuilder(new, true)
-   clade.seed[field] = new
-   clade.tape[field] = Phyle
-   clade.meta[field] =  Phyle_M
-   return Phyle
+local function specializer(cfg)
+   return function(tape, field)
+      if type(field) ~= 'string' then return nil end
+      local clade = _clade[tape]
+      local seed = assert(clade.seed[1], "clade is missing basis seed")
+      local new, Phyle, Phyle_M = cluster.genus(seed, cfg)
+      -- #note might want to defer this until :coalesce
+      cluster.extendbuilder(new, true)
+      clade.seed[field] = new
+      clade.tape[field] = Phyle
+      clade.meta[field] =  Phyle_M
+      return Phyle
+   end
 end
 ```
 
@@ -182,13 +196,16 @@ end
 
 ```lua
 local prepose = assert(fn.prepose)
+local CFG_DUMMY = {}
 
-cluster.construct(new, function(new, clade,  seed, postindex)
+cluster.construct(new, function(new, clade, seed, cfg)
+   cfg = cfg or CFG_DUMMY
    local tape, meta = cluster.tapefor(seed), cluster.metafor(seed)
-   local __index = postindex
-                   and prepose(specializer, postindex)
-                   or specializer
+   local __index = cfg.postindex
+                   and prepose(specializer(), cfg.postindex)
+                   or specializer()
    clade.tape = setmetatable({tape}, { __index = __index })
+
    -- memoize just what we use, right now, that's the tape, only
    _clade[clade.tape] = clade
    clade.seed, clade.meta = {seed}, {meta}
