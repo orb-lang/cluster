@@ -392,6 +392,70 @@ well as the index of the metatable proper.
 custom constructors to be passed in, though that's not the main intention.
 
 
+*** [/] #Todo Refactor Contract
+
+Cluster needs some hard thinking about how the existing pieces compose.
+
+I'm going to finish hacking in the =seed_fn= feature, and making sure that
+the consequences are handled.
+
+The meta-issue is that more-or-less by definition, the contract can operate
+all of the rest of cluster.
+
+This leaves us with some judgement calls as to how to proceed.
+
+
+**** [#Todo] Reconcile Builder and Creator
+
+This has been partially addressed.
+
+The observation is that the constructor doesn't care whether it's a builder or
+not.
+
+There's at least some case to be made that an order should create the subject,
+but I do intend to offer something along the lines of =replacebuilder= for
+cases where a genus has no need for the basal constructor.
+
+This allows us to generate optimal code for cases where the order is
+'abstract', which gets quote marks because it's user intention rather than,
+you guessed it, ontology.  One can imagine other cases where the
+superconstructor simply isn't germane.
+
+There are some other useful protocols (prehooks, notably) which we can
+implement for orders which use a builder rather than a creator.
+
+But we currently have to detect this distinction when specializing, which
+shouldn't be necessary.
+
+
+***** [ ] Implementation
+
+We're dealing with some fine distinctions here, briefly:
+
+A /constructor/ is that which creates, builds, assigns a metatable to, and
+returns the instance.  For proper composability, these must be constructed by
+Cluster.
+
+A /builder/ receives the subject and arguments, (presumably) decorating the
+subject, and returning it, but without assignment.  For protocol consistency,
+this is the default for orders, and is the only option for genera.
+
+A /creator/ receives only arguments, and must return a subject. Cluster
+doesn't care whether the subject is a passed argument or created de novo.
+These may only be provided for orders.  The seed is the first argument,
+unless the seed is a function.
+
+Currently, we have two code paths for an order, depending on whether a creator
+or builder is provided.
+
+What we do here is turn an order builder into a creator, which is only
+slightly tricky given that the affected parameter is the second one.
+
+This is better, because a builder-free order can't do builder-protocol stuff,
+which relies on =(seed, instance, ...)=, so the absence of a =builder= slot on
+=__meta= is meaningful.
+
+
 *** order(contract?)
 
   Cluster, in keeping with Lua's philosophy, has no equivalent of a root
@@ -437,7 +501,9 @@ local function genus(order, contract)
       else
          seed = {}
       end
-      assert(seed, "contract did not result in seed")
+      if not seed then
+         return nil, "contract did not result in seed"
+      end
       register(seed, tape, meta)
       if seed_is_table then
          setmeta(seed, { __index = tape })
@@ -503,8 +569,8 @@ constructor.  Even if the original constructor of a genus is to be reused,
 **** Signature of builder: builder(seed, instance, ...) -> instance, extra
 
 In order to successfully extend builders, they can neither create the instance
-nor assign it a metatable.  We can and do allow the latter for orders, but
-not genera, via =create= (see below).
+nor assign it a metatable.  We allow creation for orders, but not genera, via
+=create= (see below).
 
 The result of calling =construct= is a callable with the signature
 =(seed, ...) -> Instance =, so the builder signature is
@@ -514,13 +580,15 @@ The builder *must not* assign a metatable, because the JIT relies on immutable
 table/metatable relationships, and even if it didn't, assigning an
 intermediate metatable which is never used is sloppy engineering.
 
-The seed and the metatable have the same index, so it's possible to use
+The seed and the metatable have the same index[{†}], so it's possible to use
 values from the tape during building, whether that's a good idea or not
 (and it can be, as a way to design a more-generic builder which dispatches on
 qualities of genera which may not be known).
 
+{†}:  When the seed is a table.  When it isn't, it's not in the signature.
+
 The user must bear in mind that selecting slots from the seed means that
-extensions will be able to change the values.  The builder function is
+extensions *will* be able to change the values.  The builder function is
 normally defined with all three aspects of an order in scope, making it
 possible to capture values from the base if this is correct.
 
