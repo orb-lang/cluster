@@ -285,7 +285,7 @@ rawset(getfenv(1), "idest", idest)
 ```
 
 
-## order, genus, and species
+## Order, Genus, and Species
 
   Rather than fall into the taxonomic fallacy, providing levels and sublevels
 which organize thought rather than reality, we have the concepts of order,
@@ -298,17 +298,18 @@ species; a genus has both generic and specific partners\.
 An instance of a given genre we refer to as a subject, or instance, but never
 as an object, except in that rare case where we refer to it as a C struct\.
 
+In the current version, species is not a load\-bearing concept\.  It stops being
+a species if specialized, while changing not at all in structure\.  Any species
+in turn is also one of genus or order, leaving us with little need to refer to
+a genre this way\.
 
-### order\(contract?\)
-
-  Cluster, in keeping with Lua's philosophy, has no equivalent of a root
-object common to the system\.  It is a protocol, not an ontology\.
-
-A basis genre is defined with `cluster.order`, which takes an optional
-contract\.
+I'm keeping it for a couple reasons; the concept lets us speak of genres
+as "generic to" and "specific from" another genre, and we may find species
+itself meaningful in the context of coalescence, something we don't actually
+do yet\.
 
 
-#### contract
+### Contract
 
 The contract determines the exception\.
 
@@ -320,8 +321,17 @@ This is a good convention and might end up part of the protocol: aspects of
 the contract which *can* be applied later, are make available via the same
 name on cluster, with the seed as the first argument\.
 
+The contract should be identical between order and genus, insofar as possible\.
 
-##### Function Seeds
+Since the contract is optional, and never leaves Cluster, we may as well
+provide a single base case:
+
+```lua
+local CONTRACT_DEFAULT = {}
+```
+
+
+#### Function Seeds
 
 By convention, we make the seed a callable table\.
 
@@ -335,7 +345,7 @@ index the same values on the Seed and Tape\.
 It's not a requirement, and there are cases where we want the builder to be
 an ordinary function\.
 
-The slot `cfg.fn_seed` tells Cluster to use that function as the builder,
+The slot `cfg.seed_fn` tells Cluster to use that function as the builder,
 wrapping it in a closure which sets the appropriate metatable\.  This, and
 not a table, is registered and returned as the Seed\.
 
@@ -343,7 +353,7 @@ This has implications, the most important being that Cluster needs to avoid
 trying to index the Seed, and must check type if it wants to do that\.
 
 
-##### Function indices
+#### Function indices
 
   Our sensible default is that an order will have a table index, which is
 identical to the Tape\.  Cluster will handle function indices as well in
@@ -376,22 +386,7 @@ answer, being pure user intention, and there could be cases where we don't
 attach the Tape to the Seed, even when the Tape serves as an index table\.
 
 
-###### implications
-
-We need to achieve the following:
-
-
-- Index lookup on the seed is still to the tape
-
-
-- The tape may be extended, and a new closure generated for the index function
-
-
-- The keys covered by the index function, which are normally the tape but not
-  automatically, need to be exposed, in particular, to helm\.
-
-
-##### seedmeta
+#### seedmeta
 
 Normally, the Tape is assigned to the Seed metatable as the index, as
 well as the index of the metatable proper\.
@@ -400,30 +395,33 @@ well as the index of the metatable proper\.
 custom constructors to be passed in, though that's not the main intention\.
 
 
-### genus\(order: seed?, contract\)
+### order\(contract?\)
 
-This either creates or extends a genus\.
+  Cluster, in keeping with Lua's philosophy, has no equivalent of a root
+object common to the system\.  It is a protocol, not an ontology\.
 
-Why genus?  It gives us some climbing room before we bump up on class, for one
-thing\.
+A basis genre is defined with `cluster.order`, which takes an optional
+contract\.
+
+
+### genus\(genre: seed?, contract\)
+
+This specifies a genus, relative to a given genre\.
+
+Why genus?  The various terms of Linnean taxonomy have unwanted connotations,
+class very much included\.  Genus fits nicely\.
 
 It's also a reminder that we are using the techniques of prototyping and the
-metaobject protocol\.
+metaobject protocol, where class is used extensively in the sense of
+classification\.  Cluster is protocol, not ontology\.
 
-Last, it's a reminder that applying it repeatedly gives *generic* results, and
-this is paired with `specialize`, as we shall see\.
-
-Note that with three return values, offering `genus {}` would be a confusing
-interface\.
-
-
-#### contract?
-
-I want to at least add a flag `coalesce = true` to say that the contents of
-the index should be copied rather than looked up in depth\.
+Last, it's a reminder that applying it repeatedly gives *generic* results\.
+The relation between generic, genre, and genus, is pleasing, as is the pairing
+with specific, specify, specialization, and species\.
 
 ```lua
 local pairs = assert(pairs)
+local closedSeed;
 
 local function genus(order, contract)
    if order then
@@ -431,8 +429,22 @@ local function genus(order, contract)
       if not meta_tape then
          return nil, "provide seed to extend genus"
       end
-      local seed, tape, meta = register({}, {}, {__meta = {}})
-      setmeta(seed, { __index = tape })
+      local seed_is_table = true
+      contract = contract or CONTRACT_DEFAULT
+      local seed;
+      local tape, meta = {}, {__meta = {}}
+      if contract.seed_fn then
+         -- do seed_fn stuff
+         seed_is_table = false
+         seed = closedSeed(contract.seed_fn, meta)
+      else
+         seed = {}
+      end
+      assert(seed, "contract did not result in seed")
+      register(seed, tape, meta)
+      if seed_is_table then
+         setmeta(seed, { __index = tape })
+      end
       setmeta(tape, { __index = meta_tape })
       local _M = seed_meta[order]
       for k, v in pairs(_M) do
@@ -458,9 +470,23 @@ cluster.genus = genus
 ```
 
 ```lua
-local function order(no_table)
-   local seed, tape, meta = register({}, {}, {__meta = {}})
-   setmeta(seed, { __index = tape })
+local function order(contract)
+   local seed_is_table = true
+   contract = contract or CONTRACT_DEFAULT
+   local seed, tape, meta;
+   if contract.seed_fn then
+      -- do seed_fn stuff
+      seed_is_table = false
+      meta = {__meta = {}}
+      seed = closedSeed(contract.seed_fn, meta)
+   else
+      seed = {}
+      meta = {__meta = {}}
+   end
+   seed, tape, meta = register(seed, {}, meta)
+   if seed_is_table then
+      setmeta(seed, { __index = tape })
+   end
    meta.__index = tape
    meta.__meta.seed = seed
    return seed, tape, meta
@@ -649,6 +675,30 @@ This interface is experimental, to put it mildly, this is just a hunch:
 ```lua
 cluster.extend = {}
 cluster.extend.builder = extendbuilder
+```
+
+
+#### closedSeed\(seed\_fn, meta\)
+
+We use this when we need the seed to be a function, not a callable table\.
+
+Note that this is expected to create the subject table\.
+
+How to handle extension is an open question, but the signature of the
+extension kinda *has to* be `(subject, ...)` to account for cases where the
+subject is created within, not passed\.
+
+```lua
+function closedSeed(seed_fn, meta)
+   return function(...)
+      local subject, err = seed_fn(...)
+      if subject then
+         return setmetatable(subject, meta), err
+      else
+         return subject, err
+      end
+   end
+end
 ```
 
 

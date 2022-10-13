@@ -168,6 +168,8 @@ for the first step, where we make a builder and attach it to the seed table\.
 Node metatable assignment is one of the hottest loops we have, and while the
 JIT may fix our mistake, we prefer not to make it\.
 
+Adding this starts with Cluster\.
+
 
 #### specialize on index
 

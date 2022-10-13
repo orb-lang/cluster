@@ -324,7 +324,7 @@ cluster.idest = idest
 
 
 
-
+local CONTRACT_DEFAULT = {}
 
 
 
@@ -418,6 +418,7 @@ cluster.idest = idest
 
 
 local pairs = assert(pairs)
+local closedSeed;
 
 local function genus(order, contract)
    if order then
@@ -425,8 +426,22 @@ local function genus(order, contract)
       if not meta_tape then
          return nil, "provide seed to extend genus"
       end
-      local seed, tape, meta = register({}, {}, {__meta = {}})
-      setmeta(seed, { __index = tape })
+      local seed_is_table = true
+      contract = contract or CONTRACT_DEFAULT
+      local seed;
+      local tape, meta = {}, {__meta = {}}
+      if contract.seed_fn then
+         -- do seed_fn stuff
+         seed_is_table = false
+         seed = closedSeed(contract.seed_fn, meta)
+      else
+         seed = {}
+      end
+      assert(seed, "contract did not result in seed")
+      register(seed, tape, meta)
+      if seed_is_table then
+         setmeta(seed, { __index = tape })
+      end
       setmeta(tape, { __index = meta_tape })
       local _M = seed_meta[order]
       for k, v in pairs(_M) do
@@ -452,9 +467,23 @@ cluster.genus = genus
 
 
 
-local function order(no_table)
-   local seed, tape, meta = register({}, {}, {__meta = {}})
-   setmeta(seed, { __index = tape })
+local function order(contract)
+   local seed_is_table = true
+   contract = contract or CONTRACT_DEFAULT
+   local seed, tape, meta;
+   if contract.seed_fn then
+      -- do seed_fn stuff
+      seed_is_table = false
+      meta = {__meta = {}}
+      seed = closedSeed(contract.seed_fn, meta)
+   else
+      seed = {}
+      meta = {__meta = {}}
+   end
+   seed, tape, meta = register(seed, {}, meta)
+   if seed_is_table then
+      setmeta(seed, { __index = tape })
+   end
    meta.__index = tape
    meta.__meta.seed = seed
    return seed, tape, meta
@@ -643,6 +672,30 @@ cluster.extendbuilder = extendbuilder
 
 cluster.extend = {}
 cluster.extend.builder = extendbuilder
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+function closedSeed(seed_fn, meta)
+   return function(...)
+      local subject, err = seed_fn(...)
+      if subject then
+         return setmetatable(subject, meta), err
+      else
+         return subject, err
+      end
+   end
+end
 
 
 
