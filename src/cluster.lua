@@ -286,6 +286,8 @@
 
 
 
+
+
 local assert = assert
 local require = assert(require)
 local error   = assert(error)
@@ -359,8 +361,6 @@ local meta_seed, seed_meta = weak 'kv', weak 'kv'
 
 
 
-
-local insert = assert(table.insert)
 
 local function register(seed, tape, meta)
    is_seed[seed] = true

@@ -21,10 +21,12 @@ upvalue `ur`s\.
 
 ## Concepts
 
-  Cluster is a structural protocol for extending Lua's primitive facilities
-for metasyntactic extension\.  Someone coming to bridge with a grounding in
-class\-based object systems may have the feeling that we're talking around some
-basic concepts, being different for it's own sake\.
+  Cluster is a structural protocol, which further's Lua's primitive facilities
+for metasyntactic extension\.
+
+A reader with a grounding in class\-based object systems, might be forgiven for
+thinking that we're talking around some basic concepts, being different for
+its own sake\.
 
 This is always a risk, dear Reader\.  I may hope to persuade you otherwise\.
 
@@ -33,8 +35,8 @@ Lua is often described as a prototype language, but this misses the mark\.
 describe the metatable system as "metasyntactic extensions", as do we\.
 
 Lua instead uses a *structural* approach to constructing a table with the
-desired behavior\.  If one wishes to create a prototype chain, one must do so,
-the language makes this easy and fast, but doesn't require it\.
+desired behavior\.  If one wishes to create a prototype chain, one must do so\.
+The language makes this easy and fast, but doesn't require it\.
 
 Because of this structural relationship, composable complexity requires
 adherence to a common form\.
@@ -43,7 +45,7 @@ Cluster specifies this form, while providing an interface which ensures that
 this protocol is adhered to\.  It also tracks various relationships
 internally, making it a framework as well as a protocol\.
 
-This basic act of registration isn't optional, and the initial implemetation
+This basic act of registration isn't optional, and the initial implementation
 treats the entire ecosystem as global state\.  There is only one Cluster, not
 because there *must be* only one Cluster, but because we only need one\.
 
@@ -360,8 +362,6 @@ local meta_seed, seed_meta = weak 'kv', weak 'kv'
 We want a function to do all this bookkeeping for us:
 
 ```lua
-local insert = assert(table.insert)
-
 local function register(seed, tape, meta)
    is_seed[seed] = true
    is_tape[tape] = true
