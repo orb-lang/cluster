@@ -87,12 +87,215 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 local assert = assert
 local require = assert(require)
 local error   = assert(error)
 local getmeta, setmeta = assert(getmetatable), assert(setmetatable)
 -- I'm going to shadow these because I'll forget otherwise
 local getmetatable, setmetatable = nil, nil
+
+
+
+
 
 
 
@@ -111,14 +314,19 @@ local lazyloader = assert(core.module.lazyloader)
 
 
 
-
 local cluster = lazyloader { 'cluster',
                    response = "cluster:response",
                    mold     = "cluster:mold",
                    contract = "cluster:contract",
-                   -- clade = "cluster:clade",
+                      clade = "cluster:clade",
                    -- G     = "cluster:G",
                 }
+
+
+
+
+
+
 
 
 
@@ -139,15 +347,6 @@ local weak = assert(core.meta.weak)
 
 
 local is_seed, is_tape, is_meta = weak 'k', weak 'k', weak 'k'
-
-
-
-
-
-
-
-
-
 
 
 
@@ -248,6 +447,22 @@ end
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 local function idest(pred, obj)
    -- primitive
    if type(pred) == 'string' then
@@ -270,6 +485,7 @@ local function idest(pred, obj)
 
    return false
 end
+
 cluster.idest = idest
 
 
@@ -285,69 +501,7 @@ cluster.idest = idest
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 local CONTRACT_DEFAULT = {}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 

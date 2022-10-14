@@ -8,35 +8,213 @@ fashion\.  It succeeds at this, insofar as it will, by respecting the existing
 [philosophy](https://gitlab.com/special-circumstance/cluster/-/blob/trunk/doc/md/.md#philosophy) of the language\.
 
 
-## House Style for Cluster
+##### Dev Note: House Style for Cluster
 
   Because Cluster is new, the interface is unstable\.  To keep refactoring
 simple, we don't want to follow the localizing policy which is generally in
-force, and we want to require it consistently as `cluster`\.  I use `clu` in
-helm, but absent static analysis tools which are nascent at best, keeping it
-greppable is going to help\. `cluster.ur.pass` is distinctive and we wouldn't
-miss a reference to it if, say, `ur` changed name, however unlikely that
-particular case might be\.
+force, and we want to require it consistently as `cluster`\.  Scry isn't able
+to follow even very simple assignment yet, so making all uses greppable is
+going to let us refactor\. `cluster.ur.pass` is distinctive; if we decided,
+say, to change it to `cluster.ur.Pass`, this spares having to chase down
+upvalue `ur`s\.
+
+
+## Concepts
+
+  Cluster is a structural protocol for extending Lua's primitive facilities
+for metasyntactic extension\.  Someone coming to bridge with a grounding in
+class\-based object systems may have the feeling that we're talking around some
+basic concepts, being different for it's own sake\.
+
+This is always a risk, dear Reader\.  I may hope to persuade you otherwise\.
+
+Lua is often described as a prototype language, but this misses the mark\.
+\#tk:reference
+describe the metatable system as "metasyntactic extensions", as do we\.
+
+Lua instead uses a *structural* approach to constructing a table with the
+desired behavior\.  If one wishes to create a prototype chain, one must do so,
+the language makes this easy and fast, but doesn't require it\.
+
+Because of this structural relationship, composable complexity requires
+adherence to a common form\.
+
+Cluster specifies this form, while providing an interface which ensures that
+this protocol is adhered to\.  It also tracks various relationships
+internally, making it a framework as well as a protocol\.
+
+This basic act of registration isn't optional, and the initial implemetation
+treats the entire ecosystem as global state\.  There is only one Cluster, not
+because there *must be* only one Cluster, but because we only need one\.
+
+As we develop Cluster so that it may itself be extended, we will assure that
+all the necessary primitive operations are available piecemeal\.
+
+Cluster will need to be sensible to protocol across Lua\-state boundaries,
+so the notion of Clusters, plural, will need to be a cogent one\.  More than
+one Cluster in a single runtime is merely a special case of this\.
+
+
+### Cluster Meta\-Protocol
+
+  There is a simple rule underlying the rest of Cluster, which is that all
+functions return either a truthy value, or `nil, err`, where the second value
+is generally a string\.
+
+This becomes important as things get intricate, because it allows us to
+recover from errors without using a `pcall`\.  It means mistakes in Cluster are
+leaky, however, in the sense that the error caused by the return value being
+`nil` will travel away from the error, losing the error itself in the process\.
+
+We mitigate this by providing a strict mode for development purposes, which
+raises the return value into an assertion\.
+
+The purpose of Cluster is to construct subjects\.  Subjects are a type of
+object, but are not an object *per se*\.
+
+What could this possibly mean?
+
+
+### Subject and Object
+
+When we refer to objects, we mean this in the C sense of the term\.  Lua has
+nine types for objects, and the `ctype` and `userdata` types embrace the rest
+of types, therefore objects, as C understands them\.
+
+A string is an object, but we don't call it a "string object" or an object
+when we mean, specifically, a string\.  This is also true for tables, and for
+tables which have metatables\.
+
+Within Cluster, we refer to a table with a Cluster\-respecting metatable as a
+subject\.  This is sometimes called an instance, the difference is somewhat
+underspecified at present\.  The pattern of a function returning a table with
+a metatable attached suffices to make that table an instance of that metatable,
+which we obviously don't need Cluster to do\.
+
+
+### Genre: Order, Genus, Species
+
+Cluster's vocabulary originates for the most part with biology\.
+
+Clustering related behaviors into categories is unavoidably taxonomic\.
+Fortunately, we don't have reality to contend with, so this approach is not
+fated to the same doom which has befallen the Linnean tradition\.  If we say
+a Panda is a sort of Racoon, we might change our mind and say it is in fact
+a Bear\.  In stark contract with biology, it is our saying so which makes it
+the case\.  If our Rougelike calls for the Quacking Panda Duck\-Bear, so be it\.
+
+Rather than fall into the taxonomic fallacy, providing levels and sublevels
+which organize thought rather than reality, we have the concepts of order,
+genus, and species, which are collectively genres\.
+
+One of the many misfeatures Lua declines to provide is a base Object backing
+all other Objects\.  Cluster does not wrong this right\.  Our basis for the
+protocol is an order, and each is *sui generis*\.
+
+An order is always a basis, which may be instantiated, and may also be
+extended via `cluster.genus`\.  A genre with no further specializations is a
+species; a genus has both generic and specific partners\.
+
+An instance of a given genre we refer to as a subject, or instance, but never
+as an object, except when this generalization is appropriate\.
+
+A species is literally a matter of perspective, being the genre which has the
+actual metatable of a given subject\.  Lua, and Cluster, have no concept of a
+class, let alone an abstract one, so this may be an order or a genus\.  Cluster
+goes further, because a module must return something, so \(pending contract\)
+we make a constructor whether you intend to use it or not\.
+
+This makes for fluid discussion: we refer to genres as generic to and specific
+of one another, to whatever necessary depth\.  An order is basal\.  This is
+clear, and just as important, it leaves a lot of room for the weird stuff\.
+
+We'll save the details of what a call to `order` or `genus` returns for its
+own section\.  The important part is that, called with zero or one arguments,
+depending, the result is a familiar single\-inheritance system\.
+
+In the event we need parts to work differently, we provide another argument,
+a plain old table called the Contract\.
+
+
+### Contract
+
+The contract determines the exception\.
+
+When mature, all operations and variations within cluster will be available
+by contract\.  For example, a field `construct` on the contract will expect
+the same value as the second argument of `cluster.construct`\.
+
+This is a good convention and might end up part of the protocol: aspects of
+the contract which *can* be applied later, are make available via the same
+name on cluster, with the seed as the first argument\.
+
+The meaning of the contract should be identical between order and genus,
+insofar as possible\.
+
+Cluster will never assign to or otherwise mutate a contract, and doesn't
+consider fields it doesn't understand to be errors\.
+
+A Contract should be considered first\-class\.  We will probably store them, so
+mutating a Contract once applied should be avoided, but nor will Cluster
+change its value, so building another contract from the first one is
+predictable\.
+
+At present, we'll say that mutating a Contract after application is undefined,
+and we may promote it to an error and not tell you\.
+
+Provided the contract is applied successfully, `genus` and `order` will each
+return three values\.  This tripartite arrangement of objects defines the
+genre\.
 
 
 ### Seed, Tape, Meta
 
-  We need a constructor which can double as an identity for any table which is
-specialized from the genus we're defining, as well as a table we can define
-methods and other fields on such that lookup on an instance will return those
-values\.  We've handled this with `new, idEst, and Tab.__index = Tab`, and
-it isn't enough\.
+First, let's go over Lua's existing structural protocol\.
 
-The return value we'll call a **Seed**\.  This is a table with a call metamethod
-which constructs an instance, and the Tape as the index metatable, and is
-the return value of our familiar sort of module\.  Probably this should be
-read only as well\.
+The structure in this case is that of Lua's syntax\.  A table is, properly
+speaking, the specific object `GCtab`, a struct defined in `lj_obj.h`\.  If
+you want to see why we use the word object as we do, that's a great header to
+read\.
 
-The Tape is a table which is expected to be indexed against *in some way*
-by instances, and in the easy case, this has the usual single inheritance by
-metatable pattern\.  It is *not* a self table, and it is normally but not
-always the `__index` table of the Meta\.  The reference is to gene tapes,
-which if you know what a chromosome is, that's close enough to get the gist\.
+More broadly, a table is anything which respects the table *protocol*, which
+is used to access any foreign object which isn't a function\.
+
+A table may be assigned a metatable with `setmetatable`\.  A metatable is just
+a table, one where the language treats certain fields with a double underscore
+as special\.  The most important one is `__index`, which, if the value is a
+table, is used to lookup a key in the even that the instance table returns a
+`nil` value\.
+
+The order here is one reason I say Lua is not a prototype language\.  In
+prototypes, specialization starts with the prototype\.  In Lua, it is an
+optional step, performed on a table which **always** is allocated empty of
+value and metatable\.
+
+While it's possible to define a module as a simple table of metatable
+construction, return it, define instances when we need them, and then set the
+metatable, this is unbearably tedious compared to calling a function with
+arguments\.
+
+So ordinary Lua code tends to return a constructor, which sets a metatable,
+and usually the `__index` field of the metatable contains a table as well\.
+
+Cluster's three return values are exactly these\.  The constructor we call the
+**Seed**, the `__index` table is the **Tape**, and the metatable is **Meta**\.
+
+Cards on the table: the main reason for these terms is that they're all four
+letters long\.  I don't **cough** make a fetish out of it, but concision is good\.
+
+The seed must be a callable, that is, an object which conforms to Lua's
+function protocol\.  The conventional case is a table, with an anonymous
+metatable containing a `__call` metamethod, which also has the Tape as the
+`__index` slot's value\.  The Seed is a function in several important cases,
+so Cluster itself will never index a Seed\.
+
+The Tape is a table which is expected to be indexed against *in some way* by
+instances, and in the easy case, this has the usual single inheritance by
+metatable pattern\.  It is normally but not always the `__index` table of the
+Meta\.  The reference is to gene tapes, which if you know what a chromosome
+is, that's close enough\.
 
 The Meta is assigned by the constructor to an instance table as the last step
 in instantiating a table\.  We've been doing this backward, which is
@@ -47,16 +225,16 @@ things in the constructor which are given different meanings by the metatable\.
 So a completely blank canvas has these relations:
 
 ```lua
-local Seed, Tape, Meta = setmeta({}, {}), {}, {__meta = {}}
+local Seed, Tape, Meta = setmetatable({}, {}), {}, {__meta = {}}
 
-getmeta(Seed).__index = Tape
+getmetatable(Seed).__index = Tape
 
 Meta.__index = Tape
 
 Meta.__meta.__seed = Seed
 ```
 
-Although not created out in the open like that\.
+Which are created internally by Cluster, and registered as a common system\.
 
 In a real program this will look more like any other day at the widget
 factory:
@@ -68,23 +246,44 @@ local new, Widget, Widget_M = cluster.order()
 After which Widget is assigned the usual collection of methods and base
 values, and new is returned after a constructor is created\.
 
-Capturing the third value \(Meta\) is optional, so unless there are metamethods
-to be provided or extended, it can just be `local new, Widget = ...`\.
+A Lua module allows only one return value, which is probably the right call
+despite causing some inconvenience\.
 
-The secret sauce here is that `cluster:cluster` contains a private library of
-everything which passes through it\.
+Naturally, our return value is the Seed\.  Here is a quirk of the Bridge house
+style: on the requiring end, we load the module like so\.
 
-So let's give this a go\.
+```lua
+local Widget = require "widget"
+```
+
+So the Seed, which we always call `new` in the module, is referred to by the
+name we give the Tape\.
+
+This works out nicely, since the Seed is conventionally a table, and one
+devoid of values\.  Indexing the Seed will therefore give any value defined on
+the table of the same name\.
+
+The Seed is used as the identity of the genre\.  What that means we'll be
+implementing shortly\.
+
+Speaking of which\!
 
 
-### cluster
+## Cluster
+
+Now that we know what we're building, let us begin to build it\.
 
 
 #### Localize All The Things
 
   Cluster takes the unusual step of localizing everything, even single\-name
-globals\.  It's not unheard of elsewhere in the code, we use the pattern in
-Grammar\.
+globals\.  It's not unheard of elsewhere in the code, all of core *should* be
+thus\.
+
+Lua is a highly dynamic language, and such exacting care is prophylactic at
+most, but small help and no harm is sufficient reason for ceremony\.
+
+Plus it gives me a chance to ;drop `table` from the end of
 
 ```lua
 local assert = assert
@@ -96,6 +295,10 @@ local getmetatable, setmetatable = nil, nil
 ```
 
 
+#### core
+
+This is Cluster's sole dependency\.
+
 ```lua
 local core = require "qor:core"
 local lazyloader = assert(core.module.lazyloader)
@@ -104,25 +307,30 @@ local lazyloader = assert(core.module.lazyloader)
 
 ### lazy cluster
 
-I'm writing cluster as a mostly\-lazy system\.
+  The bridge\-approved way to provide a collection of libraries is with a lazy
+loader\.
 
-If anything I'll make it lazier over time\.  Much of what is created in this
-source file relies on a set of common upvalues holding weak references, more
-on that later\.
-
+Without comptime, this means maintaining two sources of truth, this being the
+replica:
 
 ```lua
 local cluster = lazyloader { 'cluster',
                    response = "cluster:response",
                    mold     = "cluster:mold",
                    contract = "cluster:contract",
-                   -- clade = "cluster:clade",
+                      clade = "cluster:clade",
                    -- G     = "cluster:G",
                 }
 ```
 
+Bridge has no concept of private modules, so even a comptime lazy loader would
+want configuration\.  A blacklist is less likely to invalidate itself than a
+whitelist, though\.
+
 
 #### cluster weak table library
+
+   \#Todo move this to its own module\.
 
    Cluster observes everything which passes through it, by saving weak
 references\.
@@ -140,15 +348,6 @@ So we need three weak tables for this purpose:
 ```lua
 local is_seed, is_tape, is_meta = weak 'k', weak 'k', weak 'k'
 ```
-
-As a quirk, we call tapes "tape" inside cluster\.  My excuse is that the
-concept map from the tape\-in\-itself to the word "tape" is at least
-translucent, and that tape\-to\-tape is also easy enough\.  This relies on a
-pun, though, and offering it to the user as a Tape would be misleading\.
-
-It is, moreover, a long word, and without going full Mencius "Procrustes"
-Moldbug on our vocabulary, the trio of four\-letter variables makes for
-pleasing code\.
 
 The three parts being inter\-related, we also map between them:
 
@@ -247,8 +446,24 @@ This initial implementation does three things:
 
 
 -  We fall back on old\-school `meta {}` style self tables\.  These are
-    deprecated and may be removed; cluster will likely have a way of creating
-    self\-tables but it won't use the `.idEst` flag\.
+    deprecated and may be removed, self tables are an anti\-pattern with dubious
+    upsides\.
+
+
+#### \[\#Todo\] \_\_meta\.sunt
+
+A subject is always of one species, metatables being what they are\.
+
+But `idest` is concerned with answering what sort of protocol a subject
+adheres to, and the one thing we can count on is that, no matter how many
+ways we have to describe a protocol, they will have a unique object which
+serves as the identity\.
+
+So the idest implementation we have here gets replaced with a `sunt` slot,
+which is a constructed Set of all identities which a given subject can assume\.
+
+This gives us a sleeker, and shallower, `idest`, with less attention paid to
+the nature of the predicate\.
 
 ```lua
 local function idest(pred, obj)
@@ -273,6 +488,7 @@ local function idest(pred, obj)
 
    return false
 end
+
 cluster.idest = idest
 ```
 
@@ -283,45 +499,6 @@ The Orbwise way to do this is to transclude the code block above into pylon\.
 ```lua
 rawset(getfenv(1), "idest", idest)
 ```
-
-
-## Order, Genus, and Species
-
-  Rather than fall into the taxonomic fallacy, providing levels and sublevels
-which organize thought rather than reality, we have the concepts of order,
-genus, and species, which are collectively genres\.
-
-An order is always a basis, which may be instantiated, and may also be
-extended via `cluster.genus`\.  A genre with no further specializations is a
-species; a genus has both generic and specific partners\.
-
-An instance of a given genre we refer to as a subject, or instance, but never
-as an object, except in that rare case where we refer to it as a C struct\.
-
-In the current version, species is not a load\-bearing concept\.  It stops being
-a species if specialized, while changing not at all in structure\.  Any species
-in turn is also one of genus or order, leaving us with little need to refer to
-a genre this way\.
-
-I'm keeping it for a couple reasons; the concept lets us speak of genres
-as "generic to" and "specific from" another genre, and we may find species
-itself meaningful in the context of coalescence, something we don't actually
-do yet\.
-
-
-### Contract
-
-The contract determines the exception\.
-
-When mature, all operations and variations within cluster will be available
-by contract\.  For example, a field `construct` on the contract will expect
-the same value as the second argument of `cluster.construct`\.
-
-This is a good convention and might end up part of the protocol: aspects of
-the contract which *can* be applied later, are make available via the same
-name on cluster, with the seed as the first argument\.
-
-The contract should be identical between order and genus, insofar as possible\.
 
 Since the contract is optional, and never leaves Cluster, we may as well
 provide a single base case:
@@ -343,7 +520,10 @@ object `Widget` in another module, is justified in being generally able to
 index the same values on the Seed and Tape\.
 
 It's not a requirement, and there are cases where we want the builder to be
-an ordinary function\.
+an ordinary function\.  Specifically, `lpeg` is sensitive to the type, not the
+shape, of a table and function, so building AST Nodes, which is our bread and
+butter, requires a function in order to be properly incorporated into pattern
+userdata\.
 
 The slot `cfg.seed_fn` tells Cluster to use that function as the builder,
 wrapping it in a closure which sets the appropriate metatable\.  This, and
@@ -359,104 +539,78 @@ trying to index the Seed, and must check type if it wants to do that\.
 identical to the Tape\.  Cluster will handle function indices as well in
 at least two ways: `.boundindex` and `.freeindex`\.
 
-A `boundindex` function must be of three arguments, `(Tape, key, value)`,
-cluster curries the tape to the index and assigns it, while putting the
-Tape somewhere where it can be consulted for keys later\.
+A `boundindex` function has parameters `(tape, subject, key)`\. Cluster curries
+the Tape to this function, otherwise treating it normally viz\. registration
+and \(given a Seed table\!\) assigning to to the Seed's index\.
 
-The Tape with `boundindex` lives at  `__meta.keys`, where the contract is
-that all values are ignored, any non\-nil value returns a key, anything in a
-keys table must have only index tables and this will be checked by cluster
-when building\.
+Furthermore, a Tape with `boundindex` lives at  `__meta.keys`, where the
+contract is: values don't matter, any result \(false included\!\) is a key, and
+indexing the slots on `keys` will not cause mutation of any sort, including
+`pairs`\.  This lets both Cluster and helm inspect a value's slots without
+triggering the function\.
 
-`freeindex` is for index metamethods which do not have a table which is the
-source of truth for indexing, maybe it gives the square of even numbers and
-the cube root of odd ones, we don't care, but we can't look up the keys on
-it and rummaging around looking for the nearest table upvalue is unlikely to
-be of assistance\.  It is unclear what serves as the Tape under these
-circumstances\.
+It's worth justifying the irregular grammar of `keys` plural, as our custom is
+to write a table serving as a key/value map in the singular\.  It's because
+the keys are what we care about, either iterating them or copying them to an
+array\.
 
-Also an `instruments_may_index` flag, meaning that despite the scary function,
-the keys which end in `__meta.keys` may be applied to that function to get a
+This leaves some details which call for flags\.
+
+One is `no_keys`, which is an instruction to not store the Tape on that slot\.
+It doesn't matter to me why someone might want to do this\.  If it makes sense
+to bind the Tape to a function, but not show these keys, set this flag\.
+
+Cluster is a structural protocol, and we don't register things we don't have
+to\.  The contract can offer a way to assign a different table for keys, but
+bit\-bashing it into Meta\.\_\_meta is also valid\.
+
+An `instruments_may_index` flag means that, despite the scary function, the
+keys which end in `__meta.keys` may be applied to that function to get a
 result\.  It's a promise of no side\-effects\.  This isn't a security thing,
 it's a politeness thing; Lua is nasal demons all the way down\.
 
-Finally, there's an orthogonal question, which is whether the Tape should be
-made available via inheritance on the Seed\.  This is a question Cluster can't
-answer, being pure user intention, and there could be cases where we don't
-attach the Tape to the Seed, even when the Tape serves as an index table\.
+`freeindex` is for index metamethods which don't have a table which is the
+source of truth for indexing\.  Maybe it gives the square of even numbers and
+the cube root of odd ones, we don't care, but we can't look up the keys on
+it in a meaningful way\.
+
+A free index renders the Tape vestigial, but we still make one\. Letting the
+Tape be something which throws an error when we index it would be masochistic\.
 
 
-#### seedmeta
+### Construction
 
-Normally, the Tape is assigned to the Seed metatable as the index, as
-well as the index of the metatable proper\.
-
-`.seedmeta` can provide a table for this\.  This will allow for completely
-custom constructors to be passed in, though that's not the main intention\.
-
-
-### \[/\] \#Todo Refactor Contract
-
-Cluster needs some hard thinking about how the existing pieces compose\.
-
-I'm going to finish hacking in the `seed_fn` feature, and making sure that
-the consequences are handled\.
-
-The meta\-issue is that more\-or\-less by definition, the contract can operate
-all of the rest of cluster\.
-
-This leaves us with some judgement calls as to how to proceed\.
-
-
-#### \[\#Todo\] Reconcile Builder and Creator
-
-This has been partially addressed\.
-
-The observation is that the constructor doesn't care whether it's a builder or
-not\.
-
-There's at least some case to be made that an order should create the subject,
-but I do intend to offer something along the lines of `replacebuilder` for
-cases where a genus has no need for the basal constructor\.
-
-This allows us to generate optimal code for cases where the order is
-'abstract', which gets quote marks because it's user intention rather than,
-you guessed it, ontology\.  One can imagine other cases where the
-superconstructor simply isn't germane\.
-
-There are some other useful protocols \(prehooks, notably\) which we can
-implement for orders which use a builder rather than a creator\.
-
-But we currently have to detect this distinction when specializing, which
-shouldn't be necessary\.
-
-
-##### \[ \] Implementation
-
-We're dealing with some fine distinctions here, briefly:
+Our approach to constructors is necessarily fine\-grained\.
 
 A *constructor* is that which creates, builds, assigns a metatable to, and
-returns the instance\.  For proper composability, these must be constructed by
-Cluster\.
+returns the instance\.  It is a callable, and either the call metamethod of the
+Seed, or the Seed itself\.
 
-A *builder* receives the subject and arguments, \(presumably\) decorating the
-subject, and returning it, but without assignment\.  For protocol consistency,
-this is the default for orders, and is the only option for genera\.
+Assigning to the metatable dictates the way we build constructors, because we
+want to assign only one metatable\.  Extensibility requires that we compose a
+constructor of at least two pieces, so that a genus can do more to a subject
+before it's assigned the genre\-appropriate meta\.
 
 A *creator* receives only arguments, and must return a subject\. Cluster
 doesn't care whether the subject is a passed argument or created de novo\.
 These may only be provided for orders\.  The seed is the first argument,
 unless the seed is a function\.
 
-Currently, we have two code paths for an order, depending on whether a creator
-or builder is provided\.
+A *builder* receives the subject and arguments, \(presumably\) decorating the
+subject, and returning it, but without assignment\.  For protocol consistency,
+this is the default for orders, and is the only option for genera\.
 
-What we do here is turn an order builder into a creator, which is only
-slightly tricky given that the affected parameter is the second one\.
+Builders are to be preferred even for orders, because they can be layered
+arbitrarily\.  Although focused on inheritance, and single inheritance at
+that, this is not the only mechanism which Cluster will embrace, and in those
+contexts the builder of an order can serve roles which a creator can't\.
 
-This is better, because a builder\-free order can't do builder\-protocol stuff,
-which relies on `(seed, instance, ...)`, so the absence of a `builder` slot on
-`__meta` is meaningful\.
+A constructor which is always passed a literal table of one argument is good
+and sufficient reason to use a creator, and there are other cases where tables
+get created before being constructed into a subject\.
+
+For the case where we would just make a local table, we let cluster do the
+work\.
 
 
 ### order\(contract?\)
