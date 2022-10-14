@@ -484,11 +484,14 @@ with specific, specify, specialization, and species.
 local pairs = assert(pairs)
 local closedSeed;
 
+local ts;
+
 local function genus(order, contract)
+   ts =  ts or require "repr:repr" . ts_color
    if order then
       local meta_tape = seed_tape[order]
       if not meta_tape then
-         return nil, "provide seed to extend genus"
+         return assert(nil, "provide seed to extend genus")
       end
       local seed_is_table = true
       contract = contract or CONTRACT_DEFAULT
@@ -502,7 +505,7 @@ local function genus(order, contract)
          seed = {}
       end
       if not seed then
-         return nil, "contract did not result in seed"
+         return assert(nil, "contract did not result in seed")
       end
       register(seed, tape, meta)
       if seed_is_table then
@@ -510,6 +513,12 @@ local function genus(order, contract)
       end
       setmeta(tape, { __index = meta_tape })
       local _M = seed_meta[order]
+      if not _M then
+         assert(nil, "no meta for generic party:\n"
+                      --.. ts(order) .. "\n\n"
+                      --.. ts(tape_seed[meta_tape])
+                      )
+      end
       for k, v in pairs(_M) do
          -- meta we copy
          if k == '__meta' then
@@ -523,6 +532,8 @@ local function genus(order, contract)
       meta.__meta.meta = _M -- ... yep.
       meta.__index = tape
       meta.__meta.seed = seed
+
+      --print("Extension:\n", ts(seed), "\n\n", ts(tape), "\n\n", ts(meta))
       return seed, tape, meta
    else
       return nil, "genus must be called on an existing genre/order"
@@ -556,6 +567,30 @@ local function order(contract)
 end
 
 cluster.order = order
+#/lua
+
+
+**** closedSeed(seed_fn, meta)
+
+We use this when we need the seed to be a function, not a callable table.
+
+Note that this is expected to create the subject table.
+
+How to handle extension is an open question, but the signature of the
+extension kinda /has to/ be =(subject, ...)= to account for cases where the
+subject is created within, not passed.
+
+#!lua
+function closedSeed(seed_fn, meta)
+   return function(...)
+      local subject, err = seed_fn(...)
+      if subject then
+         return setmetatable(subject, meta), err
+      else
+         return subject, err
+      end
+   end
+end
 #/lua
 
 
@@ -607,28 +642,72 @@ This is all that's needed if a second return value is desireable, and allows
 smuggling anything one would like out in the rare event that more return
 values would be natural.
 
-#!lua
-local compose = assert(core.fn.compose)
 
-local function makeconstructor(builder, meta)
-   return function(seed, ...)
-      local instance = {}
-      local subject, err = builder(seed, instance, ...)
-      if subject == nil then
-         error(err or "bulder must return the subject")
-      end
+***** Component Closures
+
+  We build the constructor in the necessary pieces for composability, and
+trust the heavily-biased traces to eliminate the intermediate work in hot
+code.
+
+#!lua
+local fn = core.fn
+local curry, iscallable = assert(fn.curry), assert(fn.iscallable)
+#/lua
+
+
+****** endow(meta, subject, err): Subject
+
+Simply passes through errors, and sets a metatable when it gets a chance.
+
+The order lets us catch both return values of a builder from an inline call,
+as well as curry the metatable if that proves useful.
+
+
+#!lua
+local function endow(meta, subject, err)
+   if subject == nil then
+      return nil, err or "builder must return the subject"
+   else
       return setmeta(subject, meta), err
    end
+end
+#/lua
+
+
+****** creatorbuilder(builder): creator: (seed: Seed, ...): t :t
+
+  Returns a closure which creates an empty table for the second argument to
+=builder=.
+
+#!lua
+local function creatorbuilder(builder)
+   return function(seed, ...)
+      return builder(seed, {}, ...)
+   end
+end
+#/lua
+
+
+****** makeconstructor(builder, meta)
+
+Stitches the aforementioned into a constructor.
+
+#!lua
+local function makeconstructor(builder, meta)
+   local creator = creatorbuilder(builder)
+   return function(seed, ...)
+      return endow(meta, creator(seed, ...))
+   end, creator
 end
 
 local function construct(seed, builder)
    assert(is_seed[seed], "#1 to construct must be a seed")
-   -- assert(iscallable(builder), "#2 to construct must be callable")
+   assert(iscallable(builder), "#2 to construct must be callable")
    local meta = assert(seed_meta[seed], "missing metatable for seed!")
    meta.__meta.builder = builder
-   getmeta(seed).__call = makeconstructor(builder, meta)
+   getmeta(seed).__call, meta.__meta.creator = makeconstructor(builder, meta)
 
-   return;
+   return true
 end
 
 cluster.construct = construct
@@ -648,32 +727,26 @@ necessary: ==local new, Widget = cluster.order()== is preferred in that case.
 Sometimes we need to create the instance table ourselves, this is how.
 
 This is used in e.g. Set and Message, where the content is usually provided
-in a literal table, making a new allocation a waste.
+in a literal table, making a separate allocation and copy a waste.
 
 A "builder" and a "creator" only differ while the constructor is under
 construction, they have the same image (return a subject instance without its
 metatable) and the differing domain is only relevant internally.
 
-To put it differently, a creator and a builder are extended identically, and
-this lets us put both on the =.builder= slot.
+Every meta must have a creator, which is the composition of the order's
+creator and every subsequent builder.  They may, or may not, have a builder.
 
 #!lua
 local function makecreator(creator, meta)
    return function(...)
-      local subject, err = creator(...)
-      if subject == nil then
-         error(err or "creator must return subject")
-      end
-      return setmeta(subject, meta), err
+      return endow(meta, creator(...))
    end
 end
 
 local function create(seed, creator)
    assert(is_seed[seed], "#1 to construct must be a seed")
    local meta = assert(seed_meta[seed], "missing metatable for seed!")
-
-   meta.__meta.builder = creator
-   meta.__meta.builder_creates_instance = true
+   meta.__meta.creator = creator
    getmeta(seed).__call = makecreator(creator, meta)
 end
 
@@ -687,49 +760,54 @@ cluster.create = create
 seed, instance, and all arguments, first to the super builder, then to the new
 builder.
 
-A =true= argument means the original builder is to be reused but the new
-metatable applied.
+Note that what is extended is the creator; we don't check for a super-builder,
+or need to.  Read as "extend with builder".
 
-This clobbers any second return value from the generic builder, but will
-provide the specific one if any.  I don't see an easy way around that, and if
-it comes time to write a hard one, I'll know.
+A =true= argument means the original creator is to be reused, but the new
+metatable applied.  This is admittedly one of those out-of-band signals one
+cooks up in dynamic languages.  As we build out the contract I expect it will
+be the more natural idiom for this common case.
+
+The extension clobbers any second return value from the generic builder, but
+will provide the specific one, if any.  I don't see an easy way around that,
+and if it comes time to write a hard one, I'll know.
 
 #!lua
 local function extendbuilder(seed, builder)
    assert(is_seed[seed], "#1 to construct must be a seed")
    local meta = assert(seed_meta[seed], "missing metatable for seed")
+   -- this is where we need to check for function seeds and take a whole
+   -- different branch
+   local seed_M = getmeta(seed)
    local _M = meta.__meta.meta
    if not _M then
-      error("can't extend a constructor with no inheritance, use construct")
+      return nil, "can't extend a constructor with no generic, use construct"
    end
-   local super_build = assert(_M.__meta.builder, "metatable missing a builder")
-   local created = _M.__meta.builder_creates_instance
-   local maker = created
-                 and makecreator
-                 or makeconstructor
+   -- it's the creator which we extend, read "extend with builder"
+   local gen_creator = assert(_M.__meta.creator, "metatable missing a creator")
    -- true means reuse the builder
    if builder == true then
-      meta.__meta.builder = super_build
-      getmeta(seed).__call = maker(super_build, meta)
-      return
+      meta.__meta.creator = gen_creator
+      seed_M.__call = makecreator(gen_creator, meta)
+      return true
    end
-   -- we should assert callability here?
-   local _build;
-   if created then
-      _build = function(seed, ...)
-         local _inst = super_build(seed, ...)
-         return builder(seed, _inst, ...)
-      end
-   else
-      _build = function (seed, instance, ...)
-         local _inst = super_build(seed, instance, ...)
-         return builder(seed, _inst, ...)
-      end
+   if not iscallable(builder) then
+      return nil, "builder of type " .. type(builder) .. " is not callable"
    end
 
-   meta.__meta.builder = _build
-   getmeta(seed).__call = maker(_build, meta)
-   meta.__meta.builder_creates_instance = created
+   local function creator(seed, ...)
+      local subject, err = gen_creator(seed, ...)
+      if not subject then
+         return nil, err
+      end
+
+      return builder(seed, subject, ...)
+   end
+
+   meta.__meta.builder = builder
+   meta.__meta.creator = creator
+   seed_M.__call = makecreator(creator, meta)
+   return true
 end
 
 cluster.extendbuilder = extendbuilder
@@ -740,30 +818,6 @@ This interface is experimental, to put it mildly, this is just a hunch:
 #!lua
 cluster.extend = {}
 cluster.extend.builder = extendbuilder
-#/lua
-
-
-**** closedSeed(seed_fn, meta)
-
-We use this when we need the seed to be a function, not a callable table.
-
-Note that this is expected to create the subject table.
-
-How to handle extension is an open question, but the signature of the
-extension kinda /has to/ be =(subject, ...)= to account for cases where the
-subject is created within, not passed.
-
-#!lua
-function closedSeed(seed_fn, meta)
-   return function(...)
-      local subject, err = seed_fn(...)
-      if subject then
-         return setmetatable(subject, meta), err
-      else
-         return subject, err
-      end
-   end
-end
 #/lua
 
 
@@ -785,7 +839,6 @@ It is an error to attempt to extend a method twice, or to extend a method
 which exists on the tape itself, rather than the tape's lookup chain.
 
 #!lua
-local iscallable = assert(core.fn.iscallable)
 local rawget = assert(rawget)
 
 local function super(tape, message, after_method)

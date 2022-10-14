@@ -417,14 +417,81 @@ local CONTRACT_DEFAULT = {}
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 local pairs = assert(pairs)
 local closedSeed;
 
+local ts;
+
 local function genus(order, contract)
+   ts =  ts or require "repr:repr" . ts_color
    if order then
       local meta_tape = seed_tape[order]
       if not meta_tape then
-         return nil, "provide seed to extend genus"
+         return assert(nil, "provide seed to extend genus")
       end
       local seed_is_table = true
       contract = contract or CONTRACT_DEFAULT
@@ -437,13 +504,21 @@ local function genus(order, contract)
       else
          seed = {}
       end
-      assert(seed, "contract did not result in seed")
+      if not seed then
+         return assert(nil, "contract did not result in seed")
+      end
       register(seed, tape, meta)
       if seed_is_table then
          setmeta(seed, { __index = tape })
       end
       setmeta(tape, { __index = meta_tape })
       local _M = seed_meta[order]
+      if not _M then
+         assert(nil, "no meta for generic party:\n"
+                      --.. ts(order) .. "\n\n"
+                      --.. ts(tape_seed[meta_tape])
+                      )
+      end
       for k, v in pairs(_M) do
          -- meta we copy
          if k == '__meta' then
@@ -457,6 +532,8 @@ local function genus(order, contract)
       meta.__meta.meta = _M -- ... yep.
       meta.__index = tape
       meta.__meta.seed = seed
+
+      --print("Extension:\n", ts(seed), "\n\n", ts(tape), "\n\n", ts(meta))
       return seed, tape, meta
    else
       return nil, "genus must be called on an existing genre/order"
@@ -504,188 +581,6 @@ cluster.order = order
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-local compose = assert(core.fn.compose)
-
-local function makeconstructor(builder, meta)
-   return function(seed, ...)
-      local instance = {}
-      local subject, err = builder(seed, instance, ...)
-      if subject == nil then
-         error(err or "bulder must return the subject")
-      end
-      return setmeta(subject, meta), err
-   end
-end
-
-local function construct(seed, builder)
-   assert(is_seed[seed], "#1 to construct must be a seed")
-   -- assert(iscallable(builder), "#2 to construct must be callable")
-   local meta = assert(seed_meta[seed], "missing metatable for seed!")
-   meta.__meta.builder = builder
-   getmeta(seed).__call = makeconstructor(builder, meta)
-
-   return;
-end
-
-cluster.construct = construct
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-local function makecreator(creator, meta)
-   return function(...)
-      local subject, err = creator(...)
-      if subject == nil then
-         error(err or "creator must return subject")
-      end
-      return setmeta(subject, meta), err
-   end
-end
-
-local function create(seed, creator)
-   assert(is_seed[seed], "#1 to construct must be a seed")
-   local meta = assert(seed_meta[seed], "missing metatable for seed!")
-
-   meta.__meta.builder = creator
-   meta.__meta.builder_creates_instance = true
-   getmeta(seed).__call = makecreator(creator, meta)
-end
-
-cluster.create = create
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-local function extendbuilder(seed, builder)
-   assert(is_seed[seed], "#1 to construct must be a seed")
-   local meta = assert(seed_meta[seed], "missing metatable for seed")
-   local _M = meta.__meta.meta
-   if not _M then
-      error("can't extend a constructor with no inheritance, use construct")
-   end
-   local super_build = assert(_M.__meta.builder, "metatable missing a builder")
-   local created = _M.__meta.builder_creates_instance
-   local maker = created
-                 and makecreator
-                 or makeconstructor
-   -- true means reuse the builder
-   if builder == true then
-      meta.__meta.builder = super_build
-      getmeta(seed).__call = maker(super_build, meta)
-      return
-   end
-   -- we should assert callability here?
-   local _build;
-   if created then
-      _build = function(seed, ...)
-         local _inst = super_build(seed, ...)
-         return builder(seed, _inst, ...)
-      end
-   else
-      _build = function (seed, instance, ...)
-         local _inst = super_build(seed, instance, ...)
-         return builder(seed, _inst, ...)
-      end
-   end
-
-   meta.__meta.builder = _build
-   getmeta(seed).__call = maker(_build, meta)
-   meta.__meta.builder_creates_instance = created
-end
-
-cluster.extendbuilder = extendbuilder
-
-
-
-
-
-cluster.extend = {}
-cluster.extend.builder = extendbuilder
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 function closedSeed(seed_fn, meta)
    return function(...)
       local subject, err = seed_fn(...)
@@ -717,7 +612,233 @@ end
 
 
 
-local iscallable = assert(core.fn.iscallable)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+local fn = core.fn
+local curry, iscallable = assert(fn.curry), assert(fn.iscallable)
+
+
+
+
+
+
+
+
+
+
+
+
+local function endow(meta, subject, err)
+   if subject == nil then
+      return nil, err or "builder must return the subject"
+   else
+      return setmeta(subject, meta), err
+   end
+end
+
+
+
+
+
+
+
+
+
+local function creatorbuilder(builder)
+   return function(seed, ...)
+      return builder(seed, {}, ...)
+   end
+end
+
+
+
+
+
+
+
+
+local function makeconstructor(builder, meta)
+   local creator = creatorbuilder(builder)
+   return function(seed, ...)
+      return endow(meta, creator(seed, ...))
+   end, creator
+end
+
+local function construct(seed, builder)
+   assert(is_seed[seed], "#1 to construct must be a seed")
+   assert(iscallable(builder), "#2 to construct must be callable")
+   local meta = assert(seed_meta[seed], "missing metatable for seed!")
+   meta.__meta.builder = builder
+   getmeta(seed).__call, meta.__meta.creator = makeconstructor(builder, meta)
+
+   return true
+end
+
+cluster.construct = construct
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+local function makecreator(creator, meta)
+   return function(...)
+      return endow(meta, creator(...))
+   end
+end
+
+local function create(seed, creator)
+   assert(is_seed[seed], "#1 to construct must be a seed")
+   local meta = assert(seed_meta[seed], "missing metatable for seed!")
+   meta.__meta.creator = creator
+   getmeta(seed).__call = makecreator(creator, meta)
+end
+
+cluster.create = create
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+local function extendbuilder(seed, builder)
+   assert(is_seed[seed], "#1 to construct must be a seed")
+   local meta = assert(seed_meta[seed], "missing metatable for seed")
+   -- this is where we need to check for function seeds and take a whole
+   -- different branch
+   local seed_M = getmeta(seed)
+   local _M = meta.__meta.meta
+   if not _M then
+      return nil, "can't extend a constructor with no generic, use construct"
+   end
+   -- it's the creator which we extend, read "extend with builder"
+   local gen_creator = assert(_M.__meta.creator, "metatable missing a creator")
+   -- true means reuse the builder
+   if builder == true then
+      meta.__meta.creator = gen_creator
+      seed_M.__call = makecreator(gen_creator, meta)
+      return true
+   end
+   if not iscallable(builder) then
+      return nil, "builder of type " .. type(builder) .. " is not callable"
+   end
+
+   local function creator(seed, ...)
+      local subject, err = gen_creator(seed, ...)
+      if not subject then
+         return nil, err
+      end
+
+      return builder(seed, subject, ...)
+   end
+
+   meta.__meta.builder = builder
+   meta.__meta.creator = creator
+   seed_M.__call = makecreator(creator, meta)
+   return true
+end
+
+cluster.extendbuilder = extendbuilder
+
+
+
+
+
+cluster.extend = {}
+cluster.extend.builder = extendbuilder
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 local rawget = assert(rawget)
 
 local function super(tape, message, after_method)
