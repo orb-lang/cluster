@@ -619,6 +619,35 @@ A basis genre is defined with =cluster.order=, which takes an optional
 contract.
 
 
+#!lua
+local closedSeed;
+
+local function order(contract)
+   local seed_is_table = true
+   contract = contract or CONTRACT_DEFAULT
+   local seed, tape, meta;
+   if contract.seed_fn then
+      -- do seed_fn stuff
+      seed_is_table = false
+      meta = {__meta = {}}
+      seed = closedSeed(contract.seed_fn, meta)
+   else
+      seed = {}
+      meta = {__meta = {}}
+   end
+   seed, tape, meta = register(seed, {}, meta)
+   if seed_is_table then
+      setmeta(seed, { __index = tape })
+   end
+   meta.__index = tape
+   meta.__meta.seed = seed
+   return seed, tape, meta
+end
+
+cluster.order = order
+#/lua
+
+
 *** genus(genre: seed?, contract)
 
 This specifies a genus, relative to a given genre.
@@ -636,12 +665,8 @@ with specific, specify, specialization, and species.
 
 #!lua
 local pairs = assert(pairs)
-local closedSeed;
-
-local ts;
 
 local function genus(order, contract)
-   ts =  ts or require "repr:repr" . ts_color
    if order then
       local meta_tape = seed_tape[order]
       if not meta_tape then
@@ -686,8 +711,6 @@ local function genus(order, contract)
       meta.__meta.meta = _M -- ... yep.
       meta.__index = tape
       meta.__meta.seed = seed
-
-      --print("Extension:\n", ts(seed), "\n\n", ts(tape), "\n\n", ts(meta))
       return seed, tape, meta
    else
       return nil, "genus must be called on an existing genre/order"
@@ -695,32 +718,6 @@ local function genus(order, contract)
 end
 
 cluster.genus = genus
-#/lua
-
-#!lua
-local function order(contract)
-   local seed_is_table = true
-   contract = contract or CONTRACT_DEFAULT
-   local seed, tape, meta;
-   if contract.seed_fn then
-      -- do seed_fn stuff
-      seed_is_table = false
-      meta = {__meta = {}}
-      seed = closedSeed(contract.seed_fn, meta)
-   else
-      seed = {}
-      meta = {__meta = {}}
-   end
-   seed, tape, meta = register(seed, {}, meta)
-   if seed_is_table then
-      setmeta(seed, { __index = tape })
-   end
-   meta.__index = tape
-   meta.__meta.seed = seed
-   return seed, tape, meta
-end
-
-cluster.order = order
 #/lua
 
 
@@ -754,6 +751,8 @@ Before a Cluster order or genus can be used, it *must* be provided with a
 constructor.  Even if the original constructor of a genus is to be reused,
 =extendbuilder= needs to be called with =true=.
 
+Another case where contract will often be cleaner.
+
 
 **** Signature of builder: builder(seed, instance, ...) -> instance, extra
 
@@ -779,14 +778,11 @@ qualities of genera which may not be known).
 The user must bear in mind that selecting slots from the seed means that
 extensions *will* be able to change the values.  The builder function is
 normally defined with all three aspects of an order in scope, making it
-possible to capture values from the base if this is correct.
+possible to close over references to the genre's particular Tape and Meta
+when wanted.
 
-Cluster takes care of making the builder into a constructor, by making the
-instance table, and composing an assignment of the metatable with the builder
-function.
-
-This separation lets us re-use the builder in specializing a given genus, if
-we want to, without performing the forbidden double-metatable assignment.
+Cluster composes a builder for an order into a creator, which is further
+wrapped as the constructor.
 
 We return a second value =extra=, for various good reasons.  We already
 collect a second value for error purposes, and it seems rude not to offer that
@@ -815,7 +811,6 @@ Simply passes through errors, and sets a metatable when it gets a chance.
 
 The order lets us catch both return values of a builder from an inline call,
 as well as curry the metatable if that proves useful.
-
 
 #!lua
 local function endow(meta, subject, err)
@@ -853,11 +848,22 @@ local function makeconstructor(builder, meta)
       return endow(meta, creator(seed, ...))
    end, creator
 end
+#/lua
 
+With these powers combined, we make short work of =construct= and =create=.
+
+#!lua
 local function construct(seed, builder)
-   assert(is_seed[seed], "#1 to construct must be a seed")
-   assert(iscallable(builder), "#2 to construct must be callable")
-   local meta = assert(seed_meta[seed], "missing metatable for seed!")
+   if not is_seed[seed] then
+      return nil, "#1 to construct must be a seed"
+   end
+   if not iscallable(builder) then
+      return nil, "#2 to construct must be callable"
+   end
+   local meta = seed_meta[seed]
+   if not meta then
+      return nil, "missing metatable for seed"
+   end
    meta.__meta.builder = builder
    getmeta(seed).__call, meta.__meta.creator = makeconstructor(builder, meta)
 
@@ -867,14 +873,6 @@ end
 cluster.construct = construct
 #/lua
 
-Here we see how using a local library of weak references can mitigate the
-complexity of having three tables floating around.  We don't need to hand
-back the metatable when adding the constructor, which is just an opportunity
-to pass the tape by accident.
-
-The user doesn't even have to capture the metatable if metamethods aren't
-necessary: ==local new, Widget = cluster.order()== is preferred in that case.
-
 
 **** cluster.create(seed, creator)
 
@@ -883,12 +881,11 @@ Sometimes we need to create the instance table ourselves, this is how.
 This is used in e.g. Set and Message, where the content is usually provided
 in a literal table, making a separate allocation and copy a waste.
 
-A "builder" and a "creator" only differ while the constructor is under
-construction, they have the same image (return a subject instance without its
-metatable) and the differing domain is only relevant internally.
-
 Every meta must have a creator, which is the composition of the order's
-creator and every subsequent builder.  They may, or may not, have a builder.
+creator and every subsequent builder.
+
+=create= must be called only with orders.  Let Cluster do the allocation with
+a builder if you can.
 
 #!lua
 local function makecreator(creator, meta)
@@ -898,10 +895,16 @@ local function makecreator(creator, meta)
 end
 
 local function create(seed, creator)
-   assert(is_seed[seed], "#1 to construct must be a seed")
-   local meta = assert(seed_meta[seed], "missing metatable for seed!")
+   if not is_seed[seed] then
+      return nil, "#1 to construct must be a seed"
+   end
+   local meta = seed_meta[seed]
+   if not meta then
+      return nil, "missing metatable for seed"
+   end
    meta.__meta.creator = creator
    getmeta(seed).__call = makecreator(creator, meta)
+   return true
 end
 
 cluster.create = create
@@ -926,10 +929,19 @@ The extension clobbers any second return value from the generic builder, but
 will provide the specific one, if any.  I don't see an easy way around that,
 and if it comes time to write a hard one, I'll know.
 
+As a tip, if the specific genre calls for more arguments than the generic,
+let it be one more, and make that a table.  This is much easier to handle in
+the event that further specialization is called for.
+
 #!lua
 local function extendbuilder(seed, builder)
-   assert(is_seed[seed], "#1 to construct must be a seed")
-   local meta = assert(seed_meta[seed], "missing metatable for seed")
+   if not is_seed[seed] then
+      return nil, "#1 to construct must be a seed"
+   end
+   local meta = seed_meta[seed]
+   if not meta then
+      return nil,  "missing metatable for seed"
+   end
    -- this is where we need to check for function seeds and take a whole
    -- different branch
    local seed_M = getmeta(seed)
@@ -954,13 +966,13 @@ local function extendbuilder(seed, builder)
       if not subject then
          return nil, err
       end
-
-      return builder(seed, subject, ...)
+      return builder(seed, subject, ...), err
    end
 
    meta.__meta.builder = builder
    meta.__meta.creator = creator
    seed_M.__call = makecreator(creator, meta)
+
    return true
 end
 
@@ -977,14 +989,14 @@ cluster.extend.builder = extendbuilder
 
 *** super(tape, "message", after_method)
 
-The signature we want is =super(tape):message(after_method)=, but let's
-work our way up.
+#Note the newindex style of ==super(tape).message = after_method== might be
+      preferable here.
 
-The result of calling super is to extend the method at slot =:message= by
-calling the aftermethod after the super method, with the same arguments.
+  The result of calling super is to extend the method at slot =:message= by
+calling the after method after the super method, with the same arguments.
 
 Note that this discards the value of the super method, which is compatible
-with the chaining style and anything else where the return value may be
+with the chaining style, and anything else where the return value may be
 recomputed.  Assigning a method to come after the invocation of a given
 method, one which receives the return values, is conceptually distinct and not
 yet implemented.
@@ -996,37 +1008,42 @@ which exists on the tape itself, rather than the tape's lookup chain.
 local rawget = assert(rawget)
 
 local function super(tape, message, after_method)
-   assert(is_tape[tape], "#1 error: cluster.super extends a tape")
-   assert(type(message) == 'string', "#2 must be a string")
-   assert(iscallable(after_method), "#3 must be callable")
+   if not is_tape[tape] then
+      return nil, "#1 error: cluster.super extends a tape"
+   end
+   if type(message) ~= 'string' then
+      return nil, "#2 must be a string"
+   end
+   if not iscallable(after_method) then
+      return nil, "#3 must be callable"
+   end
    -- let's prevent this happening twice
    if rawget(tape, message) then
-      error("tape already has " .. message)
+      return nil, "tape already has " .. message
    end
    local super_method = tape[message]
-   assert(iscallable(super_method), "super method value isn't callable")
+   if not iscallable(super_method) then
+      return nil,  "value of message ."
+                    .. tape .. " isn't callable, type is "
+                    .. type(super_method)
+   end
    tape[message] = function(_tape, ...)
                       super_method(_tape, ...)
                       return after_method(_tape, ...)
                    end
-   return;
+   return true
 end
 
 cluster.super = super
 cluster.extend.super = super
 #/lua
 
+That's it for the core mechanism of cluster.
 
-**** Integration with function indices #improve
+There's another thousand lines of contract still to write, but meanwhile,
+here's the ur methods.
 
-  The cluster MOP will offer a variety of extension protocols, but you'll see
-a theme, which is that of pursuing a general and satisfactory single
-inheritance which survives more than one round of specialization.
-
-This relies on the tape being a reliable source of truth when looking up the
-super method, which we will have to solve eventually. This is at least true
-when we use the bog-standard =__index= chain of tables, and I want to write
-the tricky functionalizing stuff against a need for it.
+These belong in their own module as well.
 
 
 ** Cluster .ur methods

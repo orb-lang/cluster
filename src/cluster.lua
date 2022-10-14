@@ -620,6 +620,35 @@ local CONTRACT_DEFAULT = {}
 
 
 
+local closedSeed;
+
+local function order(contract)
+   local seed_is_table = true
+   contract = contract or CONTRACT_DEFAULT
+   local seed, tape, meta;
+   if contract.seed_fn then
+      -- do seed_fn stuff
+      seed_is_table = false
+      meta = {__meta = {}}
+      seed = closedSeed(contract.seed_fn, meta)
+   else
+      seed = {}
+      meta = {__meta = {}}
+   end
+   seed, tape, meta = register(seed, {}, meta)
+   if seed_is_table then
+      setmeta(seed, { __index = tape })
+   end
+   meta.__index = tape
+   meta.__meta.seed = seed
+   return seed, tape, meta
+end
+
+cluster.order = order
+
+
+
+
 
 
 
@@ -636,12 +665,8 @@ local CONTRACT_DEFAULT = {}
 
 
 local pairs = assert(pairs)
-local closedSeed;
-
-local ts;
 
 local function genus(order, contract)
-   ts =  ts or require "repr:repr" . ts_color
    if order then
       local meta_tape = seed_tape[order]
       if not meta_tape then
@@ -686,8 +711,6 @@ local function genus(order, contract)
       meta.__meta.meta = _M -- ... yep.
       meta.__index = tape
       meta.__meta.seed = seed
-
-      --print("Extension:\n", ts(seed), "\n\n", ts(tape), "\n\n", ts(meta))
       return seed, tape, meta
    else
       return nil, "genus must be called on an existing genre/order"
@@ -695,32 +718,6 @@ local function genus(order, contract)
 end
 
 cluster.genus = genus
-
-
-
-local function order(contract)
-   local seed_is_table = true
-   contract = contract or CONTRACT_DEFAULT
-   local seed, tape, meta;
-   if contract.seed_fn then
-      -- do seed_fn stuff
-      seed_is_table = false
-      meta = {__meta = {}}
-      seed = closedSeed(contract.seed_fn, meta)
-   else
-      seed = {}
-      meta = {__meta = {}}
-   end
-   seed, tape, meta = register(seed, {}, meta)
-   if seed_is_table then
-      setmeta(seed, { __index = tape })
-   end
-   meta.__index = tape
-   meta.__meta.seed = seed
-   return seed, tape, meta
-end
-
-cluster.order = order
 
 
 
@@ -803,10 +800,8 @@ end
 
 
 
-
 local fn = core.fn
 local curry, iscallable = assert(fn.curry), assert(fn.iscallable)
-
 
 
 
@@ -854,10 +849,21 @@ local function makeconstructor(builder, meta)
    end, creator
 end
 
+
+
+
+
 local function construct(seed, builder)
-   assert(is_seed[seed], "#1 to construct must be a seed")
-   assert(iscallable(builder), "#2 to construct must be callable")
-   local meta = assert(seed_meta[seed], "missing metatable for seed!")
+   if not is_seed[seed] then
+      return nil, "#1 to construct must be a seed"
+   end
+   if not iscallable(builder) then
+      return nil, "#2 to construct must be callable"
+   end
+   local meta = seed_meta[seed]
+   if not meta then
+      return nil, "missing metatable for seed"
+   end
    meta.__meta.builder = builder
    getmeta(seed).__call, meta.__meta.creator = makeconstructor(builder, meta)
 
@@ -882,15 +888,6 @@ cluster.construct = construct
 
 
 
-
-
-
-
-
-
-
-
-
 local function makecreator(creator, meta)
    return function(...)
       return endow(meta, creator(...))
@@ -898,10 +895,16 @@ local function makecreator(creator, meta)
 end
 
 local function create(seed, creator)
-   assert(is_seed[seed], "#1 to construct must be a seed")
-   local meta = assert(seed_meta[seed], "missing metatable for seed!")
+   if not is_seed[seed] then
+      return nil, "#1 to construct must be a seed"
+   end
+   local meta = seed_meta[seed]
+   if not meta then
+      return nil, "missing metatable for seed"
+   end
    meta.__meta.creator = creator
    getmeta(seed).__call = makecreator(creator, meta)
+   return true
 end
 
 cluster.create = create
@@ -927,9 +930,18 @@ cluster.create = create
 
 
 
+
+
+
+
 local function extendbuilder(seed, builder)
-   assert(is_seed[seed], "#1 to construct must be a seed")
-   local meta = assert(seed_meta[seed], "missing metatable for seed")
+   if not is_seed[seed] then
+      return nil, "#1 to construct must be a seed"
+   end
+   local meta = seed_meta[seed]
+   if not meta then
+      return nil,  "missing metatable for seed"
+   end
    -- this is where we need to check for function seeds and take a whole
    -- different branch
    local seed_M = getmeta(seed)
@@ -954,13 +966,13 @@ local function extendbuilder(seed, builder)
       if not subject then
          return nil, err
       end
-
-      return builder(seed, subject, ...)
+      return builder(seed, subject, ...), err
    end
 
    meta.__meta.builder = builder
    meta.__meta.creator = creator
    seed_M.__call = makecreator(creator, meta)
+
    return true
 end
 
@@ -996,29 +1008,34 @@ cluster.extend.builder = extendbuilder
 local rawget = assert(rawget)
 
 local function super(tape, message, after_method)
-   assert(is_tape[tape], "#1 error: cluster.super extends a tape")
-   assert(type(message) == 'string', "#2 must be a string")
-   assert(iscallable(after_method), "#3 must be callable")
+   if not is_tape[tape] then
+      return nil, "#1 error: cluster.super extends a tape"
+   end
+   if type(message) ~= 'string' then
+      return nil, "#2 must be a string"
+   end
+   if not iscallable(after_method) then
+      return nil, "#3 must be callable"
+   end
    -- let's prevent this happening twice
    if rawget(tape, message) then
-      error("tape already has " .. message)
+      return nil, "tape already has " .. message
    end
    local super_method = tape[message]
-   assert(iscallable(super_method), "super method value isn't callable")
+   if not iscallable(super_method) then
+      return nil,  "value of message ."
+                    .. tape .. " isn't callable, type is "
+                    .. type(super_method)
+   end
    tape[message] = function(_tape, ...)
                       super_method(_tape, ...)
                       return after_method(_tape, ...)
                    end
-   return;
+   return true
 end
 
 cluster.super = super
 cluster.extend.super = super
-
-
-
-
-
 
 
 
