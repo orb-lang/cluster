@@ -673,7 +673,7 @@ local function genus(order, contract)
    if order then
       local meta_tape = seed_tape[order]
       if not meta_tape then
-         return assert(nil, "provide seed to extend genus")
+         return nil, "provide seed to extend genus"
       end
       local seed_is_table = true
       contract = contract or CONTRACT_DEFAULT
@@ -687,7 +687,7 @@ local function genus(order, contract)
          seed = {}
       end
       if not seed then
-         return assert(nil, "contract did not result in seed")
+         return nil, "contract did not result in seed"
       end
       register(seed, tape, meta)
       if seed_is_table then
@@ -696,10 +696,7 @@ local function genus(order, contract)
       setmeta(tape, { __index = meta_tape })
       local _M = seed_meta[order]
       if not _M then
-         assert(nil, "no meta for generic party:\n"
-                      --.. ts(order) .. "\n\n"
-                      --.. ts(tape_seed[meta_tape])
-                      )
+         return nil, "no meta for generic party"
       end
       for k, v in pairs(_M) do
          -- meta we copy
@@ -772,9 +769,9 @@ table/metatable relationships, and even if it didn't, assigning an
 intermediate metatable which is never used is sloppy engineering\.
 
 The seed and the metatable have the same index\[\{†\}\], so it's possible to use
-values from the tape during building, whether that's a good idea or notand it can be, as a way to design a more\-generic builder which dispatches on
-qualities
-\( of genera which may not be known\)\.
+values from the tape during building, whether that's a good idea or not
+\(and it can be, as a way to design a more\-generic builder which dispatches on
+qualities of genera which may not be known\)\.
 
 \{†\}:  When the seed is a table\.  When it isn't, it's not in the signature\.
 
@@ -953,13 +950,17 @@ local function extendbuilder(seed, builder)
       return nil, "can't extend a constructor with no generic, use construct"
    end
    -- it's the creator which we extend, read "extend with builder"
-   local gen_creator = assert(_M.__meta.creator, "metatable missing a creator")
+   local gen_creator = _M.__meta.creator
+   if not gen_creator then
+      return nil, "generic metatable missing a creator"
+   end
    -- true means reuse the builder
    if builder == true then
       meta.__meta.creator = gen_creator
       seed_M.__call = makecreator(gen_creator, meta)
       return true
    end
+
    if not iscallable(builder) then
       return nil, "builder of type " .. type(builder) .. " is not callable"
    end
