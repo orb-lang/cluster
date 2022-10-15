@@ -288,6 +288,7 @@
 
 
 
+
 local assert = assert
 local require = assert(require)
 local error   = assert(error)
@@ -338,42 +339,10 @@ local cluster = lazyloader { 'cluster',
 
 
 
-local weak = assert(core.meta.weak)
 
 
 
-
-
-
-
-
-
-local is_seed, is_tape, is_meta = weak 'k', weak 'k', weak 'k'
-
-
-
-
-
-local seed_tape, tape_seed = weak 'kv', weak 'kv'
-local tape_meta, meta_tape = weak 'kv', weak 'kv'
-local meta_seed, seed_meta = weak 'kv', weak 'kv'
-
-
-
-
-
-local function register(seed, tape, meta)
-   is_seed[seed] = true
-   is_tape[tape] = true
-   is_meta[meta] = true
-   seed_tape[seed] = tape
-   tape_seed[tape] = seed
-   tape_meta[tape] = meta
-   meta_tape[meta] = tape
-   meta_seed[meta] = seed
-   seed_meta[seed] = meta
-   return seed, tape, meta
-end
+local cab = use "cluster:cabinet" ()
 
 
 
@@ -388,6 +357,23 @@ end
 
 
 
+local is_seed, is_tape, is_meta = assert(cab.is_seed),
+                                  assert(cab.is_tape),
+                                  assert(cab.is_meta)
+
+
+
+
+
+local seed_tape, tape_seed = assert(cab.seed_tape), assert(cab.tape_seed)
+local tape_meta, meta_tape = assert(cab.tape_meta), assert(cab.meta_tape)
+local meta_seed, seed_meta = assert(cab.meta_seed), assert(cab.seed_meta)
+
+
+
+
+
+local register = cab.register
 
 
 
@@ -396,31 +382,17 @@ end
 
 
 
-function cluster.metafor(seed)
-   if is_seed[seed] then
-      local M = seed_meta[seed]
-      if M then
-         return M
-      else
-         return nil, "seed has no metatable"
-      end
-   else
-      return nil, "this is not a recognized seed"
-   end
-end
 
-function cluster.tapefor(seed)
-   if is_seed[seed] then
-      local T = seed_tape[seed]
-      if T then
-         return T
-      else
-         return nil, "seed has no tape"
-      end
-   else
-      return nil, "this is not a recognized seed"
-   end
-end
+cluster.tapefor = assert(cab.tapefor)
+cluster.metafor = assert(cab.metafor)
+
+
+
+
+
+
+
+
 
 
 
@@ -472,11 +444,9 @@ local function idest(pred, obj)
    if type(obj) == 'table' then
       local _M = getmeta(obj)
       if _M and is_meta[_M] then
-         while _M do
-            if _M.__meta.seed == pred then
-               return true
-            end
-            _M = _M.__meta.meta
+         -- make the first check an assert, then drop
+         if _M.sunt and _M.sunt[pred] then
+            return true
          end
       elseif obj.idEst == pred then
          return true
@@ -618,6 +588,23 @@ local CONTRACT_DEFAULT = {}
 
 
 
+local Set = assert(core.set)
+
+local function newmeta(seed)
+   return { __meta = {},
+            __sunt = Set {seed} }
+end
+
+
+
+
+
+
+
+
+
+
+
 
 
 local closedSeed;
@@ -629,11 +616,15 @@ local function order(contract)
    if contract.seed_fn then
       -- do seed_fn stuff
       seed_is_table = false
-      meta = {__meta = {}}
+      meta = newmeta()
       seed = closedSeed(contract.seed_fn, meta)
+      if not seed then
+         return nil, "contract did not result in seed"
+      end
+      meta.__sunt[seed] = true
    else
       seed = {}
-      meta = {__meta = {}}
+      meta = newmeta(seed)
    end
    seed, tape, meta = register(seed, {}, meta)
    if seed_is_table then
@@ -674,17 +665,20 @@ local function genus(order, contract)
       end
       local seed_is_table = true
       contract = contract or CONTRACT_DEFAULT
-      local seed;
-      local tape, meta = {}, {__meta = {}}
+      local seed, meta;
+      local tape = {}
       if contract.seed_fn then
          -- do seed_fn stuff
          seed_is_table = false
+         meta = newmeta()
          seed = closedSeed(contract.seed_fn, meta)
+         if not seed then
+            return nil, "contract did not result in seed"
+         end
+         meta.__sunt[seed] = true
       else
          seed = {}
-      end
-      if not seed then
-         return nil, "contract did not result in seed"
+         meta = newmeta(seed)
       end
       register(seed, tape, meta)
       if seed_is_table then
@@ -697,10 +691,14 @@ local function genus(order, contract)
       end
       for k, v in pairs(_M) do
          -- meta we copy
+         -- we could stand to be more detailed here
          if k == '__meta' then
             for _, __ in pairs(v) do
               meta.__meta[_] = __
             end
+         elseif k == '__sunt' then
+            -- union of sets
+            meta[k] = meta[k] + v
          else
             meta[k] = v
          end

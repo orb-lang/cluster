@@ -285,7 +285,8 @@ thus.
 Lua is a highly dynamic language, and such exacting care is prophylactic at
 most, but small help and no harm is sufficient reason for ceremony.
 
-Plus it gives me a chance to ;drop =table= from the end of
+Plus it gives me a chance to ;drop =table= from the end of the meta getter and
+setter.
 
 #!lua
 local assert = assert
@@ -332,14 +333,22 @@ whitelist, though.
 
 **** cluster weak table library
 
-   #Todo move this to its own module.
-
    Cluster observes everything which passes through it, by saving weak
 references.
 
+Although we don't yet do so, it behooves the architecture to make this system
+instantiable.
+
+Which we do with a cabinet:
+
 #!lua
-local weak = assert(core.meta.weak)
+local cab = use "cluster:cabinet" ()
 #/lua
+
+Promptly localizing everything we've just created.
+
+Let's note that the cabinet is instantiated, and we don't expose the module
+through the lazyloader.
 
 Seed, tape, and meta, have a sort of primitive component type, so cluster
 will want to be able to tell which it might be dealing with when handed a
@@ -348,79 +357,34 @@ given table.
 So we need three weak tables for this purpose:
 
 #!lua
-local is_seed, is_tape, is_meta = weak 'k', weak 'k', weak 'k'
+local is_seed, is_tape, is_meta = assert(cab.is_seed),
+                                  assert(cab.is_tape),
+                                  assert(cab.is_meta)
 #/lua
 
 The three parts being inter-related, we also map between them:
 
 #!lua
-local seed_tape, tape_seed = weak 'kv', weak 'kv'
-local tape_meta, meta_tape = weak 'kv', weak 'kv'
-local meta_seed, seed_meta = weak 'kv', weak 'kv'
+local seed_tape, tape_seed = assert(cab.seed_tape), assert(cab.tape_seed)
+local tape_meta, meta_tape = assert(cab.tape_meta), assert(cab.meta_tape)
+local meta_seed, seed_meta = assert(cab.meta_seed), assert(cab.seed_meta)
 #/lua
 
-We want a function to do all this bookkeeping for us:
+We set all these relations at once through registration:
 
 #!lua
-local function register(seed, tape, meta)
-   is_seed[seed] = true
-   is_tape[tape] = true
-   is_meta[meta] = true
-   seed_tape[seed] = tape
-   tape_seed[tape] = seed
-   tape_meta[tape] = meta
-   meta_tape[meta] = tape
-   meta_seed[meta] = seed
-   seed_meta[seed] = meta
-   return seed, tape, meta
-end
+local register = cab.register
 #/lua
 
-I'm just adding a quick note that we can call these an =observer= and
-=translator= and make them methodical.
 
+** tapefor(seed), metafor(seed)
 
-** metafor(seed), tapefor(seed)
-
-The seed is the return value from modules, and there are occasions when we
-want the metatable assigned to instances (motivating example is database
-rehydration).
-
-The tape can (usually!) be retrieved manually from the seed, but that's not
-in the contract, the seed exposes "useful fields", and though we don't happen
-to offer affordances for changing what that means yet, we will.  Therefore
-=tapefor=.
-
-It should be the case that the seed is a metonym for the genre in all
-important cases, but clearly we can add more functions if and when we need
-them.
+The Seed being our canonical return value, we expose functions to return the
+Tape and Meta given a Seed.
 
 #!lua
-function cluster.metafor(seed)
-   if is_seed[seed] then
-      local M = seed_meta[seed]
-      if M then
-         return M
-      else
-         return nil, "seed has no metatable"
-      end
-   else
-      return nil, "this is not a recognized seed"
-   end
-end
-
-function cluster.tapefor(seed)
-   if is_seed[seed] then
-      local T = seed_tape[seed]
-      if T then
-         return T
-      else
-         return nil, "seed has no tape"
-      end
-   else
-      return nil, "this is not a recognized seed"
-   end
-end
+cluster.tapefor = assert(cab.tapefor)
+cluster.metafor = assert(cab.metafor)
 #/lua
 
 
@@ -447,7 +411,7 @@ This initial implementation does three things:
    upsides.
 
 
-**** [#Todo] __meta.sunt
+**** __sunt
 
 A subject is always of one species, metatables being what they are.
 
@@ -456,11 +420,19 @@ adheres to, and the one thing we can count on is that, no matter how many
 ways we have to describe a protocol, they will have a unique object which
 serves as the identity.
 
+In Latin, /sunt/ is the third-person, plural, present, active, indicative,
+form of to be.  /Ergo/.
+
 So the idest implementation we have here gets replaced with a =sunt= slot,
 which is a constructed Set of all identities which a given subject can assume.
 
 This gives us a sleeker, and shallower, =idest=, with less attention paid to
 the nature of the predicate.
+
+I'm a bit conflicted on where =sunt= should live.  I'm going to go with on
+Meta, not the metametatable, simply because we don't /need/ three lookups.
+We don't want to crowd the metatable, but it doesn't get much more basic
+than membership.
 
 #!lua
 local function idest(pred, obj)
@@ -472,11 +444,9 @@ local function idest(pred, obj)
    if type(obj) == 'table' then
       local _M = getmeta(obj)
       if _M and is_meta[_M] then
-         while _M do
-            if _M.__meta.seed == pred then
-               return true
-            end
-            _M = _M.__meta.meta
+         -- make the first check an assert, then drop
+         if _M.sunt and _M.sunt[pred] then
+            return true
          end
       elseif obj.idEst == pred then
          return true
@@ -610,6 +580,23 @@ For the case where we would just make a local table, we let cluster do the
 work.
 
 
+**** newmeta(seed?)
+
+This table is complex in construction, so we provide a function.
+
+The seed is a convenience, as you can see we don't do anything which can't be
+done later.
+
+#!lua
+local Set = assert(core.set)
+
+local function newmeta(seed)
+   return { __meta = {},
+            __sunt = Set {seed} }
+end
+#/lua
+
+
 *** order(contract?)
 
   Cluster, in keeping with Lua's philosophy, has no equivalent of a root
@@ -629,11 +616,15 @@ local function order(contract)
    if contract.seed_fn then
       -- do seed_fn stuff
       seed_is_table = false
-      meta = {__meta = {}}
+      meta = newmeta()
       seed = closedSeed(contract.seed_fn, meta)
+      if not seed then
+         return nil, "contract did not result in seed"
+      end
+      meta.__sunt[seed] = true
    else
       seed = {}
-      meta = {__meta = {}}
+      meta = newmeta(seed)
    end
    seed, tape, meta = register(seed, {}, meta)
    if seed_is_table then
@@ -674,17 +665,20 @@ local function genus(order, contract)
       end
       local seed_is_table = true
       contract = contract or CONTRACT_DEFAULT
-      local seed;
-      local tape, meta = {}, {__meta = {}}
+      local seed, meta;
+      local tape = {}
       if contract.seed_fn then
          -- do seed_fn stuff
          seed_is_table = false
+         meta = newmeta()
          seed = closedSeed(contract.seed_fn, meta)
+         if not seed then
+            return nil, "contract did not result in seed"
+         end
+         meta.__sunt[seed] = true
       else
          seed = {}
-      end
-      if not seed then
-         return nil, "contract did not result in seed"
+         meta = newmeta(seed)
       end
       register(seed, tape, meta)
       if seed_is_table then
@@ -697,10 +691,14 @@ local function genus(order, contract)
       end
       for k, v in pairs(_M) do
          -- meta we copy
+         -- we could stand to be more detailed here
          if k == '__meta' then
             for _, __ in pairs(v) do
               meta.__meta[_] = __
             end
+         elseif k == '__sunt' then
+            -- union of sets
+            meta[k] = meta[k] + v
          else
             meta[k] = v
          end

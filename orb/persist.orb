@@ -1,0 +1,99 @@
+* Persistance
+
+
+  The standard Cluster interface for reading and writing subjects into an
+SQLite database.
+
+
+*** Strategy
+
+  On the simplest level, this is about associating a metatable with a table,
+and making sure the metatable gets back on the table.
+
+We'll want to do this in such a way that we can be expressive about the
+relationships between schema and subject, but this is a long-term project.
+
+
+** Interface
+
+
+*** cluster.arcive(seed, cfg)
+
+This sets up the genus to work with bridge arcives.
+
+What do we need to configure?
+
+- unique:  A subject which is unique needs to check the database to see if it
+           already exists.  We need to specify in some fashion which fields
+           are the unique ones, but that's more of the arcive's
+           responsibility, providing a prepared statement which k/v binds to
+           the database.
+
+- foreign keys:  Probably want some way to tell cluster what sort of subjects
+                 a foreign key represents.
+
+
+*** cluster.reviver(seed, after?: (tab: t): tab): fn(row :t): row
+
+  Takes the seed and returns a function which sets the appropriate metatable
+on a database row.  If =after= is provided, the return value of calling
+=after= on the table is used; in addition to being a good idea generally, this
+is an opportunity to cast booleans to native, same with the cdata integers
+which are returned for rowids.
+
+
+** Configurables
+
+While this is the minimum we need, it will be ergonomic for some subjects to
+have a message which they respond to by writing themselves to storage.
+
+
+**** subject:store()
+
+This will write to the database using a given prepared statement.
+
+SQLite gives a full transaction if a statement is executed without an explicit
+one, so we don't need two ways to say this.
+
+This should return a truthy value, which is conventionally the =rowid=.
+
+
+*** subject:pull()
+
+This retrieves or refreshes data for the subject from the database.
+
+
+*** Insert vs. Update
+
+There's no general answer here, so we offer the most general interface until
+we have a good way of declaring when a subject needs a new row, and when it
+should update an existing row.
+
+
+*** Validation
+
+Simply a note here that writing to the database, or reading from it, isn't the
+right time to do general validation of a subject.
+
+The main arcive-specific validation is of foreign key constrains, so we'll
+have a hook for doing that.
+
+
+*** Format
+
+The main format is 'native', if you will, where keys are columns and values
+are in a row.
+
+More general than this, we can serialize as Lua, or as JSON, the latter giving
+us a lot more query power.
+
+There's also the repr results format to think about, for completely general
+restoration of a subject from a format which includes the necessary
+information to find and apply the metatable.
+
+This can get interesting, consider a command at the repl which returns a
+Round, something with a canonical persistance system. This Round will want to
+be written as a result, however.
+
+Which is perfectly fine because result reprs can have their own persistance
+system.

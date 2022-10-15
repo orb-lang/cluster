@@ -1,0 +1,146 @@
+* Cabinet
+
+
+The system which tracks relations within Cluster.
+
+
+** Design
+
+  Cluster observes everything which passes through it, by saving weak
+references.  This was originally local to {{@/cluster}}, and, much like the
+Highlander, there could be only one.
+
+Here, we return a function, which generates a whole Cabinet to store
+everything.
+
+While this is custom cabinetry, we can see the clear outlines of a general
+form.  I expect I'll want something similar for Orb, as artifact generation
+gets more complex.
+
+#!lua
+local core = use "qor:core"
+local weak = assert(core.meta.weak)
+#/lua
+
+
+
+*** Cabinet(): cab :t
+
+We're straight-up wrapping everything in a big function, like this:
+
+#!lua
+local function Cabinet()
+#/lua
+
+Seed, tape, and meta, have a sort of primitive component type, so cluster
+will want to be able to tell which it might be dealing with when handed a
+given table.
+
+So we need three weak tables for this purpose:
+
+#!lua
+local is_seed, is_tape, is_meta = weak 'k', weak 'k', weak 'k'
+#/lua
+
+The three parts being inter-related, we also map between them:
+
+#!lua
+local seed_tape, tape_seed = weak 'kv', weak 'kv'
+local tape_meta, meta_tape = weak 'kv', weak 'kv'
+local meta_seed, seed_meta = weak 'kv', weak 'kv'
+#/lua
+
+We want a function to do all this bookkeeping for us:
+
+#!lua
+local function register(seed, tape, meta)
+   is_seed[seed] = true
+   is_tape[tape] = true
+   is_meta[meta] = true
+   seed_tape[seed] = tape
+   tape_seed[tape] = seed
+   tape_meta[tape] = meta
+   meta_tape[meta] = tape
+   meta_seed[meta] = seed
+   seed_meta[seed] = meta
+   return seed, tape, meta
+end
+#/lua
+
+I'm just adding a quick note that we can call these an =observer= and
+=translator= and make them methodical.
+
+
+** metafor(seed), tapefor(seed)
+
+The seed is the return value from modules, and there are occasions when we
+want the metatable assigned to instances (motivating example is database
+rehydration).
+
+The tape can (usually!) be retrieved manually from the seed, but that's not
+in the contract, the seed exposes "useful fields", and though we don't happen
+to offer affordances for changing what that means yet, we will.  Therefore
+=tapefor=.
+
+It should be the case that the seed is a metonym for the genre in all
+important cases, but clearly we can add more functions if and when we need
+them.
+
+#!lua
+local function metafor(seed)
+   if is_seed[seed] then
+      local M = seed_meta[seed]
+      if M then
+         return M
+      else
+         return nil, "seed has no metatable"
+      end
+   else
+      return nil, "this is not a recognized seed"
+   end
+end
+
+local function tapefor(seed)
+   if is_seed[seed] then
+      local T = seed_tape[seed]
+      if T then
+         return T
+      else
+         return nil, "seed has no tape"
+      end
+   else
+      return nil, "this is not a recognized seed"
+   end
+end
+#/lua
+
+
+**** Assemble Cabinetry
+
+#!lua
+return {
+   is_seed = is_seed,
+   is_tape = is_tape,
+   is_meta = is_meta,
+   seed_tape = seed_tape,
+   tape_seed = tape_seed,
+   tape_meta = tape_meta,
+   meta_tape = meta_tape,
+   meta_seed = meta_seed,
+   seed_meta = seed_meta,
+   register = register,
+   metafor = metafor,
+   tapefor = tapefor,
+}
+#/lua
+
+
+**** end of Cabinet()
+
+#!lua
+end
+#/lua
+
+#!lua
+return Cabinet
+#/lua
