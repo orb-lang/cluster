@@ -77,10 +77,13 @@ The seed is the return value from modules, and there are occasions when we
 want the metatable assigned to instances (motivating example is database
 rehydration).
 
-The tape can (usually!) be retrieved manually from the seed, but that's not
-in the contract, the seed exposes "useful fields", and though we don't happen
-to offer affordances for changing what that means yet, we will.  Therefore
-=tapefor=.
+The seed sometimes exposes the fields of the tape, but sometime not, whether
+because it's a function or because it just doesn't.  The metatable is not
+usually available from the seed, without instantiating and peeling apart a
+subject, which we would fain avoid.
+
+So our cabinet offers =metafor= and =tapefor= to retrieve these, which cluster
+exports to the rest of bridge.
 
 It should be the case that the seed is a metonym for the genre in all
 important cases, but clearly we can add more functions if and when we need

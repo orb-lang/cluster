@@ -436,16 +436,21 @@ cluster.metafor = assert(cab.metafor)
 
 
 local function idest(pred, obj)
+   if not obj then return false end
    -- primitive
    if type(pred) == 'string' then
       return type(obj) == pred
    end
-   -- try new-style first
-   if type(obj) == 'table' then
+   -- we can find Cluster on userdata eventually, but we need the
+   -- debug flavor of getmetatable for that anyway
+   local t = type(obj)
+   if t == 'table' then
       local _M = getmeta(obj)
       if _M and is_meta[_M] then
-         -- make the first check an assert, then drop
-         if _M.sunt and _M.sunt[pred] then
+         if not _M.sunt then
+            return assert(nil, "Cluster metatable missing identities on __sunt")
+         end
+         if _M.sunt[pred] then
             return true
          end
       elseif obj.idEst == pred then
@@ -465,13 +470,6 @@ cluster.idest = idest
 
 
 
-
-
-
-
-
-
-local CONTRACT_DEFAULT = {}
 
 
 
@@ -607,32 +605,28 @@ end
 
 
 
-local closedSeed;
+
+
+
+local applycontract;
 
 local function order(contract)
    local seed_is_table = true
-   contract = contract or CONTRACT_DEFAULT
    local seed, tape, meta;
-   if contract.seed_fn then
-      -- do seed_fn stuff
-      seed_is_table = false
-      meta = newmeta()
-      seed = closedSeed(contract.seed_fn, meta)
+   if contract then
+      seed, tape, meta = applycontract(nil, contract)
       if not seed then
-         return nil, "contract did not result in seed"
+         -- tape -> err
+         return seed, tape
       end
-      meta.__sunt[seed] = true
    else
-      seed = {}
+      seed, tape = {}, {}
       meta = newmeta(seed)
-   end
-   seed, tape, meta = register(seed, {}, meta)
-   if seed_is_table then
       setmeta(seed, { __index = tape })
+      meta.__index = tape
+      meta.__meta.seed = seed
    end
-   meta.__index = tape
-   meta.__meta.seed = seed
-   return seed, tape, meta
+   return register(seed, tape, meta)
 end
 
 cluster.order = order
@@ -656,6 +650,7 @@ cluster.order = order
 
 
 local pairs = assert(pairs)
+local nilset = assert(core.table.nilset)
 
 local function genus(order, contract)
    if order then
@@ -663,50 +658,43 @@ local function genus(order, contract)
       if not meta_tape then
          return nil, "provide seed to extend genus"
       end
-      local seed_is_table = true
-      contract = contract or CONTRACT_DEFAULT
-      local seed, meta;
-      local tape = {}
-      if contract.seed_fn then
-         -- do seed_fn stuff
-         seed_is_table = false
-         meta = newmeta()
-         seed = closedSeed(contract.seed_fn, meta)
-         if not seed then
-            return nil, "contract did not result in seed"
-         end
-         meta.__sunt[seed] = true
-      else
-         seed = {}
-         meta = newmeta(seed)
-      end
-      register(seed, tape, meta)
-      if seed_is_table then
-         setmeta(seed, { __index = tape })
-      end
-      setmeta(tape, { __index = meta_tape })
       local _M = seed_meta[order]
       if not _M then
          return nil, "no meta for generic party"
       end
+      local seed, tape, meta;
+      if contract then
+         seed, tape, meta = applycontract(order, contract)
+         if not seed then
+            -- tape -> err
+            return seed, tape
+         end
+      else
+         seed, tape = {}, {}
+         meta = newmeta(seed)
+         setmeta(seed, { __index = tape })
+         setmeta(tape, { __index = meta_tape })
+      end
+      meta.__meta.meta = _M -- ... yep.
+      nilset(meta, "__index", tape)
+      nilset(meta.__meta, "seed", seed)
+      -- we probably want to move this to a function
+      -- which also takes the contract
       for k, v in pairs(_M) do
          -- meta we copy
          -- we could stand to be more detailed here
          if k == '__meta' then
             for _, __ in pairs(v) do
-              meta.__meta[_] = __
+               nilset(meta.__meta, _, __)
             end
          elseif k == '__sunt' then
             -- union of sets
             meta[k] = meta[k] + v
          else
-            meta[k] = v
+            nilset(meta, k, v)
          end
       end
-      meta.__meta.meta = _M -- ... yep.
-      meta.__index = tape
-      meta.__meta.seed = seed
-      return seed, tape, meta
+      return register(seed, tape, meta)
    else
       return nil, "genus must be called on an existing genre/order"
    end
@@ -726,8 +714,34 @@ cluster.genus = genus
 
 
 
+local closedseed;
 
-function closedSeed(seed_fn, meta)
+function applycontract(genre, contract)
+   local tape = {}
+   local seed, meta;
+   if contract.seed_fn then
+      -- we need some sort of solution for genres,
+      -- this covers the base case
+      meta = newmeta()
+      seed = closedseed(contract.seed_fn, meta)
+      if not seed then
+         return nil, "contract did not result in seed"
+      end
+      meta.__sunt[seed] = true
+      meta.__meta.creator = seed
+   end
+
+   if not contract.seed_fn then
+      setmeta(seed, { __index = tape })
+   end
+   nilset(meta,"__index", tape)
+   nilset(meta.__meta, "seed", seed)
+   return seed, tape, meta
+end
+
+
+
+function closedseed(seed_fn, meta)
    return function(...)
       local subject, err = seed_fn(...)
       if subject then

@@ -87,6 +87,9 @@ end
 
 
 
+
+
+
 local function metafor(seed)
    if is_seed[seed] then
       local M = seed_meta[seed]
