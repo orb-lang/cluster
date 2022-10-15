@@ -376,6 +376,9 @@ We set all these relations at once through registration:
 local register = cab.register
 ```
 
+Which we call only at the end, letting us be relaxed about building a genre:
+if anything goes wrong, we bail without adding anything to the system\.
+
 
 ## tapefor\(seed\), metafor\(seed\)
 
@@ -585,8 +588,8 @@ work\.
 
 This table is complex in construction, so we provide a function\.
 
-The seed is a convenience, as you can see we don't do anything which can't be
-done later\.
+The seed is a convenience, as we don't do anything which can't be done later\.
+
 
 ```lua
 local Set = assert(core.set)
@@ -659,7 +662,7 @@ local function genus(order, contract)
    if order then
       local meta_tape = seed_tape[order]
       if not meta_tape then
-         return nil, "provide seed to extend genus"
+         return nil, "#1 is not a seed"
       end
       local _M = seed_meta[order]
       if not _M then
@@ -717,21 +720,39 @@ This implements the heart of Cluster's protocol\.
 When we get to extending `applycontract` itself, we'll have a proper MOP\.
 
 ```lua
+local fn = core.fn
+local iscallable = assert(fn.iscallable)
+
 local closedseed;
 
 function applycontract(genre, contract)
    local tape = {}
    local seed, meta;
    if contract.seed_fn then
-      -- we need some sort of solution for genres,
-      -- this covers the base case
+      local seed_fn;
+      if genre then
+         local gen_meta = seed_meta[genre]
+         if not gen_meta then
+            return nil, "missing meta for genre"
+         end
+         if contract.seed_fn == true then
+            seed_fn = gen_meta.__meta.creator
+         else
+            return nil, "extending seed builders is NYI"
+         end
+      else
+         seed_fn = contract.seed_fn
+      end
+      if not iscallable(seed_fn) then
+         return nil, "seed function is not callable, type " .. type(seed_fn) .. debug.traceback()
+      end
       meta = newmeta()
-      seed = closedseed(contract.seed_fn, meta)
+      seed = closedseed(seed_fn, meta)
       if not seed then
          return nil, "contract did not result in seed"
       end
       meta.__sunt[seed] = true
-      meta.__meta.creator = seed
+      meta.__meta.creator = seed_fn
    end
 
    if not contract.seed_fn then
@@ -748,7 +769,7 @@ function closedseed(seed_fn, meta)
    return function(...)
       local subject, err = seed_fn(...)
       if subject then
-         return setmetatable(subject, meta), err
+         return setmeta(subject, meta), err
       else
          return subject, err
       end
@@ -781,9 +802,9 @@ table/metatable relationships, and even if it didn't, assigning an
 intermediate metatable which is never used is sloppy engineering\.
 
 The seed and the metatable have the same index\[\{†\}\], so it's possible to use
-values from the tape during building, whether that's a good idea or not
-\(and it can be, as a way to design a more\-generic builder which dispatches on
-qualities of genera which may not be known\)\.
+values from the tape during building, whether that's a good idea or notand it can be, as a way to design a more\-generic builder which dispatches on
+qualities
+\( of genera which may not be known\)\.
 
 \{†\}:  When the seed is a table\.  When it isn't, it's not in the signature\.
 
@@ -810,11 +831,6 @@ values would be natural\.
   We build the constructor in the necessary pieces for composability, and
 trust the heavily\-biased traces to eliminate the intermediate work in hot
 code\.
-
-```lua
-local fn = core.fn
-local curry, iscallable = assert(fn.curry), assert(fn.iscallable)
-```
 
 
 ###### endow\(meta, subject, err\): Subject
@@ -1304,9 +1320,9 @@ interface\.
 
 #### Meta\-Object Protocol
 
-  One of the attractions of Lua is that it embraces the correct definition of
-"object" to use when programming anywhere near the C runtime\.
+  One of the attractions of Lua is that it embraces the correct definition ofobject" to use when programming anywhere near the C runtime\.
 
+"
 This is more than just a particular layout of memory, pointer references can
 make the instance of a particular object arbitrarily complex, but what an
 object **is** to the C programmer needn't be defined to point out that Lua uses

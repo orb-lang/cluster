@@ -383,6 +383,9 @@ local register = cab.register
 
 
 
+
+
+
 cluster.tapefor = assert(cab.tapefor)
 cluster.metafor = assert(cab.metafor)
 
@@ -656,7 +659,7 @@ local function genus(order, contract)
    if order then
       local meta_tape = seed_tape[order]
       if not meta_tape then
-         return nil, "provide seed to extend genus"
+         return nil, "#1 is not a seed"
       end
       local _M = seed_meta[order]
       if not _M then
@@ -714,21 +717,39 @@ cluster.genus = genus
 
 
 
+local fn = core.fn
+local iscallable = assert(fn.iscallable)
+
 local closedseed;
 
 function applycontract(genre, contract)
    local tape = {}
    local seed, meta;
    if contract.seed_fn then
-      -- we need some sort of solution for genres,
-      -- this covers the base case
+      local seed_fn;
+      if genre then
+         local gen_meta = seed_meta[genre]
+         if not gen_meta then
+            return nil, "missing meta for genre"
+         end
+         if contract.seed_fn == true then
+            seed_fn = gen_meta.__meta.creator
+         else
+            return nil, "extending seed builders is NYI"
+         end
+      else
+         seed_fn = contract.seed_fn
+      end
+      if not iscallable(seed_fn) then
+         return nil, "seed function is not callable, type " .. type(seed_fn) .. debug.traceback()
+      end
       meta = newmeta()
-      seed = closedseed(contract.seed_fn, meta)
+      seed = closedseed(seed_fn, meta)
       if not seed then
          return nil, "contract did not result in seed"
       end
       meta.__sunt[seed] = true
-      meta.__meta.creator = seed
+      meta.__meta.creator = seed_fn
    end
 
    if not contract.seed_fn then
@@ -745,7 +766,7 @@ function closedseed(seed_fn, meta)
    return function(...)
       local subject, err = seed_fn(...)
       if subject then
-         return setmetatable(subject, meta), err
+         return setmeta(subject, meta), err
       else
          return subject, err
       end
@@ -806,11 +827,6 @@ end
 
 
 
-
-
-
-local fn = core.fn
-local curry, iscallable = assert(fn.curry), assert(fn.iscallable)
 
 
 

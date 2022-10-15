@@ -39,6 +39,7 @@ local function Cabinet()
 
 
 
+
 local is_seed, is_tape, is_meta = weak 'k', weak 'k', weak 'k'
 
 
@@ -48,6 +49,9 @@ local is_seed, is_tape, is_meta = weak 'k', weak 'k', weak 'k'
 local seed_tape, tape_seed = weak 'kv', weak 'kv'
 local tape_meta, meta_tape = weak 'kv', weak 'kv'
 local meta_seed, seed_meta = weak 'kv', weak 'kv'
+
+
+
 
 
 
@@ -65,7 +69,6 @@ local function register(seed, tape, meta)
    seed_meta[seed] = meta
    return seed, tape, meta
 end
-
 
 
 
@@ -121,19 +124,23 @@ end
 
 
 
+
+
+
+
 return {
-   is_seed = is_seed,
-   is_tape = is_tape,
-   is_meta = is_meta,
-   seed_tape = seed_tape,
-   tape_seed = tape_seed,
-   tape_meta = tape_meta,
-   meta_tape = meta_tape,
-   meta_seed = meta_seed,
-   seed_meta = seed_meta,
-   register = register,
-   metafor = metafor,
-   tapefor = tapefor,
+   is_seed    =  is_seed,
+   is_tape    =  is_tape,
+   is_meta    =  is_meta,
+   seed_tape  =  seed_tape,
+   tape_seed  =  tape_seed,
+   tape_meta  =  tape_meta,
+   meta_tape  =  meta_tape,
+   meta_seed  =  meta_seed,
+   seed_meta  =  seed_meta,
+   register   =  register,
+   metafor    =  metafor,
+   tapefor    =  tapefor,
 }
 
 

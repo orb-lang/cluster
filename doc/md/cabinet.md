@@ -32,11 +32,12 @@ We're straight\-up wrapping everything in a big function, like this:
 local function Cabinet()
 ```
 
-Seed, tape, and meta, have a sort of primitive component type, so cluster
-will want to be able to tell which it might be dealing with when handed a
-given table\.
+As we often do when a module is one big function, we don't indent the body\.
 
-So we need three weak tables for this purpose:
+Seed, tape, and meta, have a sort of primitive identity/type, so cluster needs
+to be able to tell which it might be dealing with when handed a given table\.
+
+So we use three weak tables for the purpose:
 
 ```lua
 local is_seed, is_tape, is_meta = weak 'k', weak 'k', weak 'k'
@@ -49,6 +50,9 @@ local seed_tape, tape_seed = weak 'kv', weak 'kv'
 local tape_meta, meta_tape = weak 'kv', weak 'kv'
 local meta_seed, seed_meta = weak 'kv', weak 'kv'
 ```
+
+
+### register\(seed, tape, meta\)
 
 We want a function to do all this bookkeeping for us:
 
@@ -85,9 +89,8 @@ subject, which we would fain avoid\.
 So our cabinet offers `metafor` and `tapefor` to retrieve these, which cluster
 exports to the rest of bridge\.
 
-It should be the case that the seed is a metonym for the genre in all
-important cases, but clearly we can add more functions if and when we need
-them\.
+Due to how Cluster is structured, these are the only two of the six logical
+getters which we happen to need\.
 
 ```lua
 local function metafor(seed)
@@ -120,20 +123,24 @@ end
 
 #### Assemble Cabinetry
 
+Cluster, our only consumer, completely deconstructs this table\.
+
+I feel we're still better off not using this many separate return values\.
+
 ```lua
 return {
-   is_seed = is_seed,
-   is_tape = is_tape,
-   is_meta = is_meta,
-   seed_tape = seed_tape,
-   tape_seed = tape_seed,
-   tape_meta = tape_meta,
-   meta_tape = meta_tape,
-   meta_seed = meta_seed,
-   seed_meta = seed_meta,
-   register = register,
-   metafor = metafor,
-   tapefor = tapefor,
+   is_seed    =  is_seed,
+   is_tape    =  is_tape,
+   is_meta    =  is_meta,
+   seed_tape  =  seed_tape,
+   tape_seed  =  tape_seed,
+   tape_meta  =  tape_meta,
+   meta_tape  =  meta_tape,
+   meta_seed  =  meta_seed,
+   seed_meta  =  seed_meta,
+   register   =  register,
+   metafor    =  metafor,
+   tapefor    =  tapefor,
 }
 ```
 

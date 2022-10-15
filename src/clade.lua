@@ -182,9 +182,7 @@ local function specializer(cfg)
       if type(field) ~= 'string' then return nil end
       local clade = _clade[tape]
       local seed = assert(clade.seed[1], "clade is missing basis seed")
-      local new, Phyle, Phyle_M = cluster.genus(seed, cfg)
-      -- #note might want to defer this until :coalesce
-      cluster.extendbuilder(new, true)
+      local new, Phyle, Phyle_M = assert(cluster.genus(seed, cfg))
       clade.seed[field] = new
       clade.tape[field] = Phyle
       clade.meta[field] =  Phyle_M
@@ -204,8 +202,8 @@ cluster.construct(new, function(new, clade, seed, cfg)
    cfg = cfg or CFG_DUMMY
    local tape, meta = cluster.tapefor(seed), cluster.metafor(seed)
    local __index = cfg.postindex
-                   and prepose(specializer(), cfg.postindex)
-                   or specializer()
+                   and prepose(specializer(cfg), cfg.postindex)
+                   or specializer(cfg)
    clade.tape = setmetatable({tape}, { __index = __index })
 
    -- memoize just what we use, right now, that's the tape, only
