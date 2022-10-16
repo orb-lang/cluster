@@ -289,6 +289,16 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
 local assert = assert
 local require = assert(require)
 local error   = assert(error)
@@ -589,6 +599,7 @@ cluster.idest = idest
 
 
 
+
 local Set = assert(core.set)
 
 local function newmeta(seed)
@@ -741,7 +752,7 @@ function applycontract(genre, contract)
          seed_fn = contract.seed_fn
       end
       if not iscallable(seed_fn) then
-         return nil, "seed function is not callable, type " .. type(seed_fn) .. debug.traceback()
+         return nil, "seed function is not callable, type "
       end
       meta = newmeta()
       seed = closedseed(seed_fn, meta)
@@ -750,10 +761,9 @@ function applycontract(genre, contract)
       end
       meta.__sunt[seed] = true
       meta.__meta.creator = seed_fn
-   end
-
-   if not contract.seed_fn then
-      setmeta(seed, { __index = tape })
+   else
+      seed = setmeta({}, { __index = tape })
+      meta = newmeta(seed)
    end
    nilset(meta,"__index", tape)
    nilset(meta.__meta, "seed", seed)

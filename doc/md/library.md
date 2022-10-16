@@ -1,0 +1,48 @@
+# Library
+
+
+  A system for writing libraries\.
+
+Bridge modules serve a number of purposes, one common pattern being a library\.
+
+This is a simple affordance which leverages Lua's first class environments to
+let us write them with less ceremony\.
+
+
+## Design
+
+We build a function metatable which assigns 'globals' to a given return value,
+but without leaving the library bound to the fenv\.
+
+Not much to it, let's go\.
+
+
+### library\(fenv?\): lib: t
+
+```lua
+local getfenv, setfenv = assert(getfenv), assert(setfenv)
+local setmeta, setmetatable = assert(setmetatable), nil
+
+local function library(fenv)
+   local env = fenv or getfenv(2)
+   local lib = {}
+   local function idx(_env, k)
+      local v = lib[k]
+      if v ~= nil then
+         return v
+      end
+      return env[k]
+   end
+   local function newidx(_env, k, v)
+      lib[k] = v
+   end
+   local _E = setmeta({}, { __index = idx, __newindex = newidx })
+   setfenv(2, _E)
+
+   return lib
+end
+```
+
+```lua
+return library
+```

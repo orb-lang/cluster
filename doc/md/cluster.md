@@ -93,6 +93,16 @@ underspecified at present\.  The pattern of a function returning a table with
 a metatable attached suffices to make that table an instance of that metatable,
 which we obviously don't need Cluster to do\.
 
+The term instance here is a borrow from object\-as\-in\-class languages, no sense
+denying it\.  We mean it differently: "in this instance", not "instance of":
+this code is one instance of assigning that metatable to the table of the
+instant\.  It merely means that the table is associated with a particular
+metatable, meaning either this metatable was set, or it will be\.
+
+It is the subject which is an instance of a genre, and using this term carries
+more weight than instance\.  References to a subject may be assumed to adhere
+to the Cluster protocol, this may, or may not, be true of an instance\.
+
 
 ### Genre: Order, Genus, Species
 
@@ -578,7 +588,8 @@ contexts the builder of an order can serve roles which a creator can't\.
 
 A constructor which is always passed a literal table of one argument is good
 and sufficient reason to use a creator, and there are other cases where tables
-get created before being constructed into a subject\.
+get created before being constructed into a subject, or where we want subjects
+to be unique based on various parameters and use a cache\.
 
 For the case where we would just make a local table, we let cluster do the
 work\.
@@ -744,7 +755,7 @@ function applycontract(genre, contract)
          seed_fn = contract.seed_fn
       end
       if not iscallable(seed_fn) then
-         return nil, "seed function is not callable, type " .. type(seed_fn) .. debug.traceback()
+         return nil, "seed function is not callable, type "
       end
       meta = newmeta()
       seed = closedseed(seed_fn, meta)
@@ -753,10 +764,9 @@ function applycontract(genre, contract)
       end
       meta.__sunt[seed] = true
       meta.__meta.creator = seed_fn
-   end
-
-   if not contract.seed_fn then
-      setmeta(seed, { __index = tape })
+   else
+      seed = setmeta({}, { __index = tape })
+      meta = newmeta(seed)
    end
    nilset(meta,"__index", tape)
    nilset(meta.__meta, "seed", seed)
