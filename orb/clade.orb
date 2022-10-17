@@ -302,6 +302,14 @@ end
 #/lua
 
 
+**** Clade:prune(dont_know?)
+
+Thinking ahead here, because Clades themselves must specialize, which can
+result in Phyla which we don't need.  Everything else can be removed manually,
+but scrubbing phyla needs to be done carefully so we also remove the seed and
+meta.
+
+
 #!lua
 return new
 #/lua

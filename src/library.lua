@@ -38,6 +38,24 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 local getfenv, setfenv = assert(getfenv), assert(setfenv)
 local setmeta, setmetatable = assert(setmetatable), nil
 

@@ -442,10 +442,13 @@ which is a constructed Set of all identities which a given subject can assume.
 This gives us a sleeker, and shallower, =idest=, with less attention paid to
 the nature of the predicate.
 
-I'm a bit conflicted on where =sunt= should live.  I'm going to go with on
-Meta, not the metametatable, simply because we don't /need/ three lookups.
-We don't want to crowd the metatable, but it doesn't get much more basic
-than membership.
+We put this on the metatable, and not the meta-metatable, for a few reasons.
+Cluster should be able to re-derive =sunt= from inspection of =__meta=, and
+conversely we want to abide by the results of =sunt[pred]= no matter where the
+elements of the Set come from.
+
+Being a cache, from Cluster's perspective, there's no advantage in the extra
+lookup
 
 #!lua
 local function idest(pred, obj)
@@ -459,15 +462,15 @@ local function idest(pred, obj)
    local t = type(obj)
    if t == 'table' then
       local _M = getmeta(obj)
-      if _M and is_meta[_M] then
-         if not _M.sunt then
-            return assert(nil, "Cluster metatable missing identities on __sunt")
-         end
+      if _M and _M.sunt then
          if _M.sunt[pred] then
             return true
          end
       elseif obj.idEst == pred then
          return true
+      elseif _M and is_meta[_M] then
+         -- even internal errors should not be raised but
+         return assert(nil, "Cluster metatable missing identities on __sunt")
       end
    end
 
@@ -620,6 +623,20 @@ contract.
 A contract is applied with [[applycontract][@applycontract]], passing =nil= as
 the first argument due to the absence of a generic party.
 
+
+**** #Todo Better handling of defaults
+
+We want one function which can be applied to any triplet, whether order or
+genus, and regardless of contract, which sets up any relations which weren't
+put in place.
+
+We'll have to figure out empirically which of the structural relationships are
+needed for the protocol and which aren't.  The rule is that subsequent
+operations should never override the contract, if something in the structure
+built by the contract is wrong, we must detect this during application.
+
+Signature is =(order, seed, tape, meta)=, which returns =true= for
+consistency.
 
 #!lua
 local applycontract;
@@ -777,14 +794,11 @@ end
 #/lua
 
 #!lua
+local endow;
+
 function closedseed(seed_fn, meta)
    return function(...)
-      local subject, err = seed_fn(...)
-      if subject then
-         return setmeta(subject, meta), err
-      else
-         return subject, err
-      end
+      return endow(meta, seed_fn(...))
    end
 end
 #/lua
@@ -853,9 +867,11 @@ The order lets us catch both return values of a builder from an inline call,
 as well as curry the metatable if that proves useful.
 
 #!lua
-local function endow(meta, subject, err)
+function endow(meta, subject, err)
    if subject == nil then
       return nil, err or "builder must return the subject"
+   elseif err == nil then
+      return setmeta(subject, meta)
    else
       return setmeta(subject, meta), err
    end

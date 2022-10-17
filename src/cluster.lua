@@ -448,6 +448,9 @@ cluster.metafor = assert(cab.metafor)
 
 
 
+
+
+
 local function idest(pred, obj)
    if not obj then return false end
    -- primitive
@@ -459,15 +462,15 @@ local function idest(pred, obj)
    local t = type(obj)
    if t == 'table' then
       local _M = getmeta(obj)
-      if _M and is_meta[_M] then
-         if not _M.sunt then
-            return assert(nil, "Cluster metatable missing identities on __sunt")
-         end
+      if _M and _M.sunt then
          if _M.sunt[pred] then
             return true
          end
       elseif obj.idEst == pred then
          return true
+      elseif _M and is_meta[_M] then
+         -- even internal errors should not be raised but
+         return assert(nil, "Cluster metatable missing identities on __sunt")
       end
    end
 
@@ -606,6 +609,20 @@ local function newmeta(seed)
    return { __meta = {},
             __sunt = Set {seed} }
 end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -777,14 +794,11 @@ end
 
 
 
+local endow;
+
 function closedseed(seed_fn, meta)
    return function(...)
-      local subject, err = seed_fn(...)
-      if subject then
-         return setmeta(subject, meta), err
-      else
-         return subject, err
-      end
+      return endow(meta, seed_fn(...))
    end
 end
 
@@ -853,9 +867,11 @@ end
 
 
 
-local function endow(meta, subject, err)
+function endow(meta, subject, err)
    if subject == nil then
       return nil, err or "builder must return the subject"
+   elseif err == nil then
+      return setmeta(subject, meta)
    else
       return setmeta(subject, meta), err
    end
