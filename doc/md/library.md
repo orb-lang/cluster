@@ -9,6 +9,24 @@ This is a simple affordance which leverages Lua's first class environments to
 let us write them with less ceremony\.
 
 
+### use
+
+Simple:
+
+```lua
+local lib = use "cluster:library" ()
+
+local an_upvalue = 5
+
+function giveFive()
+   return an_upvalue
+end
+
+slot = "I'm lib.slot!"
+
+return lib -- { giveFive = giveFive, slot = slot }
+```
+
 ## Design
 
 We build a function metatable which assigns 'globals' to a given return value,

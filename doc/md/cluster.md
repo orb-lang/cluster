@@ -670,51 +670,55 @@ local pairs = assert(pairs)
 local nilset = assert(core.table.nilset)
 
 local function genus(order, contract)
-   if order then
-      local meta_tape = seed_tape[order]
-      if not meta_tape then
-         return nil, "#1 is not a seed"
-      end
-      local _M = seed_meta[order]
-      if not _M then
-         return nil, "no meta for generic party"
-      end
-      local seed, tape, meta;
-      if contract then
-         seed, tape, meta = applycontract(order, contract)
-         if not seed then
-            -- tape -> err
-            return seed, tape
-         end
-      else
-         seed, tape = {}, {}
-         meta = newmeta(seed)
-         setmeta(seed, { __index = tape })
-         setmeta(tape, { __index = meta_tape })
-      end
-      meta.__meta.meta = _M -- ... yep.
-      nilset(meta, "__index", tape)
-      nilset(meta.__meta, "seed", seed)
-      -- we probably want to move this to a function
-      -- which also takes the contract
-      for k, v in pairs(_M) do
-         -- meta we copy
-         -- we could stand to be more detailed here
-         if k == '__meta' then
-            for _, __ in pairs(v) do
-               nilset(meta.__meta, _, __)
-            end
-         elseif k == '__sunt' then
-            -- union of sets
-            meta[k] = meta[k] + v
-         else
-            nilset(meta, k, v)
-         end
-      end
-      return register(seed, tape, meta)
-   else
+   if not order then
       return nil, "genus must be called on an existing genre/order"
    end
+
+   local meta_tape = seed_tape[order]
+   if not meta_tape then
+       return nil, "#1 is not a seed"
+   end
+   local _M = seed_meta[order]
+   if not _M then
+       return nil, "no meta for generic party"
+   end
+   local seed, tape, meta;
+   if contract then
+       seed, tape, meta = applycontract(order, contract)
+       if not seed then
+         -- tape -> err
+         return seed, tape
+       end
+       if not getmeta(tape) then
+          setmeta(tape, { __index = meta_tape })
+       end
+   else
+       seed, tape = {}, {}
+       meta = newmeta(seed)
+       setmeta(seed, { __index = tape })
+       setmeta(tape, { __index = meta_tape })
+   end
+   meta.__meta.meta = _M -- ... yep.
+   nilset(meta, "__index", tape)
+   nilset(meta.__meta, "seed", seed)
+   -- we probably want to move this to a function
+   -- which also takes the contract
+   for k, v in pairs(_M) do
+       -- meta we copy
+       -- we could stand to be more detailed here
+       if k == '__meta' then
+         for _, __ in pairs(v) do
+             nilset(meta.__meta, _, __)
+         end
+       elseif k == '__sunt' then
+         -- union of sets
+         meta[k] = meta[k] + v
+       else
+         nilset(meta, k, v)
+       end
+   end
+
+   return register(seed, tape, meta)
 end
 
 cluster.genus = genus
@@ -770,6 +774,7 @@ function applycontract(genre, contract)
    end
    nilset(meta,"__index", tape)
    nilset(meta.__meta, "seed", seed)
+
    return seed, tape, meta
 end
 ```
@@ -812,9 +817,9 @@ table/metatable relationships, and even if it didn't, assigning an
 intermediate metatable which is never used is sloppy engineering\.
 
 The seed and the metatable have the same index\[\{†\}\], so it's possible to use
-values from the tape during building, whether that's a good idea or notand it can be, as a way to design a more\-generic builder which dispatches on
-qualities
-\( of genera which may not be known\)\.
+values from the tape during building, whether that's a good idea or not
+\(and it can be, as a way to design a more\-generic builder which dispatches on
+qualities of genera which may not be known\)\.
 
 \{†\}:  When the seed is a table\.  When it isn't, it's not in the signature\.
 
