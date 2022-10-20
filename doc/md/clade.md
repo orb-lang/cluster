@@ -302,7 +302,45 @@ end
 ```
 
 
-#### Clade:prune\(dont\_know?\)
+### Clade:extend\(contract?\)
+
+  Cluster requires that all operations be functions on the seed, because we
+can't block the namespace, or indeed, rely on the seed being an indexable\.
+
+The Clade has no such limitations, so we extend with a method\.
+
+The contract is currently passed directly through to Cluster, but Clade may
+use it as well in future\.
+
+
+#### The Easy Part First
+
+  If we have a Clade which only has the basal genre, then all we need is
+another Clade which extends it\.  That's the easy part\.
+
+The fun part is rebasing any derived Phyles onto the new genre, and this is
+necessary for everything we're doing here\.  This is where Cluster starts to
+shine, because we *have* everything we need to decompose the existing Phyla
+and build new ones\.
+
+Unanswered question is how coalescence works with extension\.  We won't
+coalesce the Clade itself, but we might coalesce a copy, and rebase the clade
+on that copy\.
+
+```lua
+function Clade.extend(clade, contract)
+   local basis = clade.seed[1]
+   if not basis then
+      return assert(nil, "clade has no basal seed?")
+   end  -- we'll need meta and probably tape as well, eventually
+   local seed = cluster.genus(basis, contract)
+   -- #reminder: this expects [1] to be the only filled slot
+   return new(seed, contract)
+end
+```
+
+
+#### Clade\.prune\(dont\_know?\)
 
 Thinking ahead here, because Clades themselves must specialize, which can
 result in Phyla which we don't need\.  Everything else can be removed manually,

@@ -311,5 +311,43 @@ end
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+function Clade.extend(clade, contract)
+   local basis = clade.seed[1]
+   if not basis then
+      return assert(nil, "clade has no basal seed?")
+   end  -- we'll need meta and probably tape as well, eventually
+   local seed = cluster.genus(basis, contract)
+   -- #reminder: this expects [1] to be the only filled slot
+   return new(seed, contract)
+end
+
+
+
+
+
+
+
+
+
+
+
+
 return new
 
