@@ -533,76 +533,6 @@ cluster.idest = idest
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 local Set = assert(core.set)
 
 local function newmeta(seed)
@@ -639,7 +569,7 @@ end
 
 
 
-local applycontract;
+local applycontract, nameFor;
 
 local function order(contract)
    local seed_is_table = true
@@ -656,6 +586,7 @@ local function order(contract)
       setmeta(seed, { __index = tape })
       meta.__index = tape
       meta.__meta.seed = seed
+      meta.__meta.name = nameFor(contract)
    end
    return register(seed, tape, meta)
 end
@@ -712,6 +643,7 @@ local function genus(order, contract)
        setmeta(seed, { __index = tape })
        setmeta(tape, { __index = meta_tape })
    end
+   meta.__meta.name = nameFor(contract)
    meta.__meta.meta = _M -- ... yep.
    nilset(meta, "__index", tape)
    nilset(meta.__meta, "seed", seed)
@@ -736,6 +668,81 @@ local function genus(order, contract)
 end
 
 cluster.genus = genus
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -801,6 +808,47 @@ function closedseed(seed_fn, meta)
       return endow(meta, seed_fn(...))
    end
 end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+local L = use "lpeg"
+local P, C, match = L.P, L.C, L.match
+
+local opt_project = (-P":" * 1)^1 * P":"
+
+local dir = (-P"/" * 1) * P"/"
+local leaf = opt_project^-1 * dir^0 * C(P(1)^1)
+
+
+
+local getinfo = assert(debug.getinfo)
+local sub, upper = string.sub, string.upper
+
+function nameFor(contract)
+   local source = getinfo(3, 'S').source
+   local head = sub(source, 1, 1)
+   if head == '@' then
+      -- do a better job later
+      local leafo = match(leaf, sub(source, 2))
+      if leafo then
+        return upper(sub(leafo,1,1)) .. sub(leafo, 2)
+      else
+        return sub(source, 2)
+      end
+   end
+end
+
 
 
 

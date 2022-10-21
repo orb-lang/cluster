@@ -119,7 +119,7 @@ local _clade = weak 'kv'
 #/lua
 
 
-*** Clade(seed: Seed, cfg?: t): c: Clade, c.tape
+*** Clade(seed: Seed, contract?: t): c: Clade, c.tape
 
 Creates and returns a clade from a given seed.
 
@@ -129,38 +129,24 @@ tape.
 
 Note that indexing other tables in the clade will not do things automagically.
 
-This will surely end up with a cfg table, and it's not clear that =onindex= is
-so special as to deserve its position, rather than being one field of the
-config.
+
+**** Clade Contract
+
+  Contracts are the core Cluster mechanism, which make it a protocol and not
+something else.
+
+The Clade doesn't have a separate Contract, in the sense that all Contract
+is passed to Cluster and interpreted by the same logic.
+
+Contract will be the main point of developement going forward.  Here we
+briefly describe protocols of particular use to Clade, and propose others.
 
 
-**** configuration notes
+***** contract.seed_fn
 
-  We'll fairly quickly reach a situation where we need to provide a different
-builder for some phyla.  The switch to having builders, rather than detecting
-whether a meta is a function or table then calling or assigning, simplifies
-the case of subgrammars, but it means having a system to keep cluster's
-bookkeeping accurate.
-
-Cluster is built so that slots aren't written twice in 'normal' use, which is
-why the builder must be extended manually (though there's room for a verb
-which does this for us).
-
-It's a losing proposition to insist on never writing to a slot more than once,
-however.  The part we need is the cluster operation which assures that
-=__meta= has accurate information.
-
-The config table might have a =defer_builder= slot, with a set of phyle tags
-where the builder should be left blank.
-
-Another option is to defer all builders other than the basis until
-coalescence, which I'm liking more as I think about it.
-
-
-***** cfg.seed_fn
-
-  In Node, we need the builder to be a function, because a table gets filled
-with captures without checking for callability first.
+  In Node, we need the builder to be a function, because of how lpeg patterns
+dispatch: on type, so lpeg will ignore the callability of a table and just
+put the captures directly into it.
 
 This can be dealt with by wrapping the seed in a function, but we have no use
 for the first step, where we make a builder and attach it to the seed table.
@@ -169,6 +155,26 @@ Node metatable assignment is one of the hottest loops we have, and while the
 JIT may fix our mistake, we prefer not to make it.
 
 Adding this starts with Cluster.
+
+
+***** #Todo: dispatched endowment
+
+=endow= is the inner Cluster function we use to either assign the appropriate
+metatable, or propagate errors.
+
+For Clades, which are just Nodes stripped of semantics, it's normal for both
+the creator function and the associated metatable to have the tag in common.
+So we could have just one creator and one endowment, both of them dispatched
+against the tag.  So the Clade Seed would have a collection of identical
+functions(presuming none were overridden), and that function would internally
+lookup on Clade Meta to assign the table.
+
+While this is merely an optimization, it may prove to be a considerable one
+for Orb, which will have hundreds of grammars to wield.  The current scheme
+creates two closures per rule, which could be two closures /per grammar/.
+
+Lower big O is the kind of thing which shouldn't be left laying on the table.
+
 
 
 **** specialize on index

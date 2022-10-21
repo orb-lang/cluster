@@ -492,76 +492,6 @@ rawset(getfenv(1), "idest", idest)
 ```
 
 
-#### Function Seeds
-
-By convention, we make the seed a callable table\.
-
-This is the most useful default: it gives access to the Tape, from both the
-return value, and during construction\.  When this is useful, we're happy about
-it, and it otherwise stays out of the way\.  The convention of calling the
-Tape `Widget` and the seed `new`, returning the seed, and calling that same
-object `Widget` in another module, is justified in being generally able to
-index the same values on the Seed and Tape\.
-
-It's not a requirement, and there are cases where we want the builder to be
-an ordinary function\.  Specifically, `lpeg` is sensitive to the type, not the
-shape, of a table and function, so building AST Nodes, which is our bread and
-butter, requires a function in order to be properly incorporated into pattern
-userdata\.
-
-The slot `cfg.seed_fn` tells Cluster to use that function as the builder,
-wrapping it in a closure which sets the appropriate metatable\.  This, and
-not a table, is registered and returned as the Seed\.
-
-This has implications, the most important being that Cluster needs to avoid
-trying to index the Seed, and must check type if it wants to do that\.
-
-
-#### Function indices
-
-  Our sensible default is that an order will have a table index, which is
-identical to the Tape\.  Cluster will handle function indices as well in
-at least two ways: `.boundindex` and `.freeindex`\.
-
-A `boundindex` function has parameters `(tape, subject, key)`\. Cluster curries
-the Tape to this function, otherwise treating it normally viz\. registration
-and \(given a Seed table\!\) assigning to to the Seed's index\.
-
-Furthermore, a Tape with `boundindex` lives at  `__meta.keys`, where the
-contract is: values don't matter, any result \(false included\!\) is a key, and
-indexing the slots on `keys` will not cause mutation of any sort, including
-`pairs`\.  This lets both Cluster and helm inspect a value's slots without
-triggering the function\.
-
-It's worth justifying the irregular grammar of `keys` plural, as our custom is
-to write a table serving as a key/value map in the singular\.  It's because
-the keys are what we care about, either iterating them or copying them to an
-array\.
-
-This leaves some details which call for flags\.
-
-One is `no_keys`, which is an instruction to not store the Tape on that slot\.
-It doesn't matter to me why someone might want to do this\.  If it makes sense
-to bind the Tape to a function, but not show these keys, set this flag\.
-
-Cluster is a structural protocol, and we don't register things we don't have
-to\.  The contract can offer a way to assign a different table for keys, but
-bit\-bashing it into Meta\.\_\_meta is also valid\.
-
-An `instruments_may_index` flag means that, despite the scary function, the
-keys which end in `__meta.keys` may be applied to that function to get a
-result\.  It's a promise of no side\-effects\.  This isn't a security thing,
-it's a politeness thing; Lua is nasal demons all the way down\.
-
-`freeindex` is for index metamethods which don't have a table which is the
-source of truth for indexing\.  Maybe it gives the square of even numbers and
-the cube root of odd ones, we don't care, but we can't look up the keys on
-it in a meaningful way\.
-
-A free index renders the Tape vestigial, but we still make one\. Letting the
-Tape be something which throws an error when we index it would be masochistic\.
-
-
 ### Construction
 
 Our approach to constructors is necessarily fine\-grained\.
@@ -642,7 +572,7 @@ Signature is `(order, seed, tape, meta)`, which returns `true` for
 consistency\.
 
 ```lua
-local applycontract;
+local applycontract, nameFor;
 
 local function order(contract)
    local seed_is_table = true
@@ -659,6 +589,7 @@ local function order(contract)
       setmeta(seed, { __index = tape })
       meta.__index = tape
       meta.__meta.seed = seed
+      meta.__meta.name = nameFor(contract)
    end
    return register(seed, tape, meta)
 end
@@ -715,6 +646,7 @@ local function genus(order, contract)
        setmeta(seed, { __index = tape })
        setmeta(tape, { __index = meta_tape })
    end
+   meta.__meta.name = nameFor(contract)
    meta.__meta.meta = _M -- ... yep.
    nilset(meta, "__index", tape)
    nilset(meta.__meta, "seed", seed)
@@ -742,7 +674,7 @@ cluster.genus = genus
 ```
 
 
-#### applycontract\(genre, contract\)
+### Contract
 
 A genre which comes with a contract is constructed entirely through this
 separate pathway\.
@@ -750,6 +682,81 @@ separate pathway\.
 This implements the heart of Cluster's protocol\.
 
 When we get to extending `applycontract` itself, we'll have a proper MOP\.
+
+What follows are the supported extensions of the Contract\.
+
+
+##### Function Seeds
+
+By convention, we make the seed a callable table\.
+
+This is the most useful default: it gives access to the Tape, from both the
+return value, and during construction\.  When this is useful, we're happy about
+it, and it otherwise stays out of the way\.  The convention of calling the
+Tape `Widget` and the seed `new`, returning the seed, and calling that same
+object `Widget` in another module, is justified in being generally able to
+index the same values on the Seed and Tape\.
+
+It's not a requirement, and there are cases where we want the builder to be
+an ordinary function\.  Specifically, `lpeg` is sensitive to the type, not the
+shape, of a table and function, so building AST Nodes, which is our bread and
+butter, requires a function in order to be properly incorporated into pattern
+userdata\.
+
+The slot `cfg.seed_fn` tells Cluster to use that function as the builder,
+wrapping it in a closure which sets the appropriate metatable\.  This, and
+not a table, is registered and returned as the Seed\.
+
+This has implications, the most important being that Cluster needs to avoid
+trying to index the Seed, and must check type if it wants to do that\.
+
+
+##### Function indices \#NYI
+
+  Our sensible default is that an order will have a table index, which is
+identical to the Tape\.  Cluster will handle function indices as well in
+at least two ways: `.boundindex` and `.freeindex`\.
+
+A `boundindex` function has parameters `(tape, subject, key)`\. Cluster curries
+the Tape to this function, otherwise treating it normally viz\. registration
+and \(given a Seed table\!\) assigning to to the Seed's index\.
+
+Furthermore, a Tape with `boundindex` lives at  `__meta.keys`, where the
+contract is: values don't matter, any result \(false included\!\) is a key, and
+indexing the slots on `keys` will not cause mutation of any sort, including
+`pairs`\.  This lets both Cluster and helm inspect a value's slots without
+triggering the function\.
+
+It's worth justifying the irregular grammar of `keys` plural, as our custom is
+to write a table serving as a key/value map in the singular\.  It's because
+the keys are what we care about, either iterating them or copying them to an
+array\.
+
+This leaves some details which call for flags\.
+
+One is `no_keys`, which is an instruction to not store the Tape on that slot\.
+It doesn't matter to me why someone might want to do this\.  If it makes sense
+to bind the Tape to a function, but not show these keys, set this flag\.
+
+Cluster is a structural protocol, and we don't register things we don't have
+to\.  The contract can offer a way to assign a different table for keys, but
+bit\-bashing it into Meta\.\_\_meta is also valid\.
+
+An `instruments_may_index` flag means that, despite the scary function, the
+keys which end in `__meta.keys` may be applied to that function to get a
+result\.  It's a promise of no side\-effects\.  This isn't a security thing,
+it's a politeness thing; Lua is nasal demons all the way down\.
+
+`freeindex` is for index metamethods which don't have a table which is the
+source of truth for indexing\.  Maybe it gives the square of even numbers and
+the cube root of odd ones, we don't care, but we can't look up the keys on
+it in a meaningful way\.
+
+A free index renders the Tape vestigial, but we still make one\. Letting the
+Tape be something which throws an error when we index it would be masochistic\.
+
+
+#### applycontract\(genre, contract\)
 
 ```lua
 local fn = core.fn
@@ -805,6 +812,47 @@ function closedseed(seed_fn, meta)
    end
 end
 ```
+
+
+#### nameFor\(contract\)
+
+This ignores the contract, but overriding the default name is clearly a
+contract thing\.
+
+
+### Module pattern
+
+We do this with raw lpeg because Cluster is a dependency of our parsers\.
+
+```lua
+local L = use "lpeg"
+local P, C, match = L.P, L.C, L.match
+
+local opt_project = (-P":" * 1)^1 * P":"
+
+local dir = (-P"/" * 1) * P"/"
+local leaf = opt_project^-1 * dir^0 * C(P(1)^1)
+```
+
+```lua
+local getinfo = assert(debug.getinfo)
+local sub, upper = string.sub, string.upper
+
+function nameFor(contract)
+   local source = getinfo(3, 'S').source
+   local head = sub(source, 1, 1)
+   if head == '@' then
+      -- do a better job later
+      local leafo = match(leaf, sub(source, 2))
+      if leafo then
+        return upper(sub(leafo,1,1)) .. sub(leafo, 2)
+      else
+        return sub(source, 2)
+      end
+   end
+end
+```
+
 
 
 ### construct\(seed, builder\)
