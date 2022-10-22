@@ -443,14 +443,6 @@ cluster.metafor = assert(cab.metafor)
 
 
 
-
-
-
-
-
-
-
-
 local function idest(pred, obj)
    if not obj then return false end
    -- primitive
@@ -462,8 +454,8 @@ local function idest(pred, obj)
    local t = type(obj)
    if t == 'table' then
       local _M = getmeta(obj)
-      if _M and _M.sunt then
-         if _M.sunt[pred] then
+      if _M and _M.__sunt then
+         if _M.__sunt[pred] then
             return true
          end
       elseif obj.idEst == pred then
@@ -471,6 +463,10 @@ local function idest(pred, obj)
       elseif _M and is_meta[_M] then
          -- even internal errors should not be raised but
          return assert(nil, "Cluster metatable missing identities on __sunt")
+      end
+      -- every subject is idest(cluster, subject) == true
+      if (pred == cluster) and is_meta[_M] then
+         return true
       end
    end
 
@@ -643,10 +639,11 @@ local function genus(order, contract)
        setmeta(seed, { __index = tape })
        setmeta(tape, { __index = meta_tape })
    end
-   meta.__meta.name = nameFor(contract)
-   meta.__meta.meta = _M -- ... yep.
+   local __meta = meta.__meta
+   __meta.meta = _M
+   __meta.name, __meta.source = nameFor(contract)
    nilset(meta, "__index", tape)
-   nilset(meta.__meta, "seed", seed)
+   nilset(__meta, "seed", seed)
    -- we probably want to move this to a function
    -- which also takes the contract
    for k, v in pairs(_M) do
@@ -654,7 +651,7 @@ local function genus(order, contract)
        -- we could stand to be more detailed here
        if k == '__meta' then
          for _, __ in pairs(v) do
-             nilset(meta.__meta, _, __)
+             nilset(__meta, _, __)
          end
        elseif k == '__sunt' then
          -- union of sets
@@ -842,11 +839,33 @@ function nameFor(contract)
       -- do a better job later
       local leafo = match(leaf, sub(source, 2))
       if leafo then
-        return upper(sub(leafo,1,1)) .. sub(leafo, 2)
+        return upper(sub(leafo,1,1)) .. sub(leafo, 2), source
       else
-        return sub(source, 2)
+        return sub(source, 2), source
       end
+   else -- /not/ the empty string
+      return nil, nil
    end
+end
+
+
+
+
+
+
+function cluster.genrename(subject)
+   if type(subject) ~= 'table' then
+      return nil, '#1 is not a table'
+   end
+
+   local _M = getmeta(subject)
+   if not _M then
+      return nil, "table has no metatable"
+   end
+   if not is_meta[_M] then
+      return nil, "table is not a Cluster subject"
+   end
+   return _M.__meta.name
 end
 
 

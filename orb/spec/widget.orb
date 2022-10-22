@@ -13,7 +13,7 @@ local s = require "status:status" ()
 #/lua
 
 #!lua
-local new, Widget, Widget_M = cluster.genus()
+local new, Widget, Widget_M = cluster.order()
 #/lua
 
 Widgets can have a color and number, at base, 1 and black:

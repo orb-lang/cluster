@@ -13,7 +13,7 @@ local s = require "status:status" ()
 
 
 
-local new, Widget, Widget_M = cluster.genus()
+local new, Widget, Widget_M = cluster.order()
 
 
 
