@@ -56,8 +56,8 @@ s.verbose = true
   Autothread is our little trick to restart coroutines which come from a
 coroutine nest\.
 
-We check a `.autothread` field on the Response, which we use if provided,
-defaulting to standard autothread:
+We check a `.blue` / `.autothread` ::Deprecated:: field on the Response, which
+we use if provided, defaulting to standard autothread:
 
 ```lua
 local autothread = require "cluster:autothread"
@@ -215,7 +215,7 @@ local resume = assert(coroutine.resume)
 
 function Response.respond(response, ...)
    response.pending = false
-   local thread = response.autothread or autothread
+   local thread = response.blue or response.autothread or autothread
    response:pack(...)
    if response.work == response.co then
       return resume(response.co, ...)

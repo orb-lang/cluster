@@ -1,6 +1,6 @@
 #\* Clade
 
-  Clades are a cluster protocol for creating a family of related metatables,
+  Clades are a Cluster protocol for creating a family of related metatables,
 one where the members may not be known in advance\.
 
 The motive is working with syntax trees, which are our primary subject of
@@ -10,10 +10,10 @@ focus in bridge\.
 ## Structure
 
   Inheritance is normally bespoke, as is the subsequent relationship between
-related species\.  In clade, we generate a whole named collection of
+related species\.  In Clade, we generate a whole named collection of
 descendants, known as phyles, which the clade maintains as a single structure\.
 
-Clade being part of cluster, a clade is based on a single cluster genus, which
+Clade being part of Cluster, a clade is based on a single cluster genus, which
 we refer to as the basis\.  This genus is created by the author, and the seed
 passed to clade, which returns a clade\.
 
@@ -166,7 +166,7 @@ For Clades, which are just Nodes stripped of semantics, it's normal for both
 the creator function and the associated metatable to have the tag in common\.
 So we could have just one creator and one endowment, both of them dispatched
 against the tag\.  So the Clade Seed would have a collection of identical
-functions\(presuming none were overridden\), and that function would internally
+functions \(presuming none were overridden\), and that function would internally
 lookup on Clade Meta to assign the table\.
 
 While this is merely an optimization, it may prove to be a considerable one
@@ -175,6 +175,9 @@ creates two closures per rule, which could be two closures *per grammar*\.
 
 Lower big O is the kind of thing which shouldn't be left laying on the table\.
 
+One possibility is that `[1]` has the actual seed, the fields are `true`
+unless we've patched a custom seed function, we can build something generic
+out of that\.
 
 
 #### specialize on index
@@ -186,6 +189,7 @@ across the three collections\.  This returns the tape of the phyle\.
 local function specializer(cfg)
    return function(tape, field)
       if type(field) ~= 'string' then return nil end
+
       local clade = _clade[tape]
       local seed = assert(clade.seed[1], "clade is missing basis seed")
       local new, Phyle, Phyle_M = assert(cluster.genus(seed, cfg))
@@ -229,7 +233,7 @@ of the Clade\.  It's a general cluster concept we haven't added yet, because we
 don't actually use deep or complex inheritance very much at all\.
 
 The idea is that lookup is resolved down to a single level of depth \(when
-possible\), while maintaining the actual cluster contractin the metametatable\.
+possible\), while maintaining the actual cluster contract in the metametatable\.
 
 For clades, the assembly of the clade involves resolving all the various
 moving parts into a collection of metatables and their builders which reflects
@@ -261,6 +265,9 @@ bug, but not as necessarily so\.  With vectors it might be the intention\.
 The most conservative thing to do is make all three cases an error, and allow
 trait and vector overrides with configuration\.
 
+Instead, we're collecting anomalies when we see them, which can be promoted to
+an error\.
+
 ```lua
 function Clade.coalesce(clade)
    -- I should write Byron 0.1 for the destructuring alone
@@ -270,42 +277,72 @@ function Clade.coalesce(clade)
                                               clade.quality,
                                               clade.vector
    -- apply qualia
+   local anomalies, anom_Q, anom_T, anom_V = {}, {}, {}, {}
+
    for Q, set in pairs(quality) do
       for tag in pairs(set) do
          if not seed[tag] then
-            return nil, "Clade has no phyle " .. tag .. " for quality " .. Q
+            anomalies.quality = anom_Q
+            anom_Q[Q] = anom_Q[Q] or {}
+            anom_Q[Q][tag] = "Clade has no phyle " .. tag
+                          .. " for quality " .. Q
          end
-         tape[elem][Q] = true
+         tape[tag][Q] = true
       end
    end
+
    -- traits with collision detection
    for T, impl in pairs(trait) do
       local qual = quality[T]
       if not qual then
-         return nil, "Trait " .. T .. " has no corresponding quality"
-      end
-      -- these are canonically message and method but we don't actually care
-      for message, method in pairs(impl) do
-         for tag in pairs(qual) do
-            local phyle = tape[tag]
-            -- handle collisions here
-            tape[tag][message] = method
-         end
-      end
-      for message, impl in pairs(vector) do
-         for tag, method in pairs(impl) do
-            if not seed[tag] then
-               return nil, "No phyle " .. tag .. " for vector " .. message
+         anomalies.trait = anom_T
+         anom_T[qual] = "Trait " .. T .. " has no corresponding quality "
+                        .. qual
+      else
+         -- these are canonically message and method
+         for message, method in pairs(impl) do
+            for tag in pairs(qual) do
+               local phyle = tape[tag]
+               -- handle collisions here
+               tape[tag][message] = method
             end
-            -- collisions here are okay but we should notice it
+         end
+      end
+   end
+
+   -- vector application last
+   for message, impl in pairs(vector) do
+      for tag, method in pairs(impl) do
+         if not seed[tag] then
+            anomalies.vector = anom_V
+            anom_V[message] = anom_V[message] or {}
+            anom_V[message][tag] = "No phyle " .. tag
+                                .. " for vector " .. message
+         else
+            -- collisions here are okay but we make note of it
+            if tape[tag][message] then
+               anom_V[message] = anom_V[message] or {}
+               anom_V[message][tape] = "(at least one) duplicate method"
+            end
             tape[tag][message] = method
          end
       end
+   end
+   if table.nkeys(anomalies) > 0 then
+      clade.anomalies = anomalies
    end
 
    return clade
 end
 ```
+
+
+### Clade:trim\(\) \#NYI
+
+  We'll run into circumstances \(many, as it happens\) where a Clade is
+specialized to a subset of its Phyla\.
+
+The major example being producing a rule parser from a grammar\.
 
 
 ### Clade:extend\(contract?\)

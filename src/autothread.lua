@@ -70,28 +70,32 @@ local function autothreader(thread)
    -- capture and return the thread
    return function(...)
       local work;
-      bridge.green = 1 -- #TODO check that bridge is truthy and run on block
-      if type(thread) == 'thread' then
-         work = thread
-      elseif type(thread) == 'function' then
-         work = create(thread)
-      else -- if thread isn't callable this will break
-         work = create(function(...)
-                          return thread(...)
-                       end)
+      bridge.green = 1
+
+      if bridge.green then
+         if type(thread) == 'thread' then
+            work = thread
+         elseif type(thread) == 'function' then
+            work = create(thread)
+         else -- if thread isn't callable this will break
+            work = create(function(...)
+                             return thread(...)
+                          end)
+         end
+         local res = pack(resume(work, ...))
+         local ok, response, state = res[1], res[2], status(work)
+         if ok and state == 'dead' then
+            return select(2, unpack(res))
+         elseif not ok then
+            error(response)
+         elseif type(response) == 'table' and response.isResponse then
+            response.work = work
+         else
+            yield(select(2, unpack(res)))
+         end
+         bridge.green = -1
       end
-      local res = pack(resume(work, ...))
-      local ok, response, state = res[1], res[2], status(work)
-      if ok and state == 'dead' then
-         return select(2, unpack(res))
-      elseif not ok then
-         error(response)
-      elseif type(response) == 'table' and response.isResponse then
-         response.work = work
-      else
-         yield(select(2, unpack(res)))
-      end
-      bridge.green = -1
+
       return nil
    end
 end

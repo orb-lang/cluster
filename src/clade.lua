@@ -183,9 +183,13 @@ local _clade = weak 'kv'
 
 
 
+
+
+
 local function specializer(cfg)
    return function(tape, field)
       if type(field) ~= 'string' then return nil end
+
       local clade = _clade[tape]
       local seed = assert(clade.seed[1], "clade is missing basis seed")
       local new, Phyle, Phyle_M = assert(cluster.genus(seed, cfg))
@@ -262,6 +266,9 @@ end)
 
 
 
+
+
+
 function Clade.coalesce(clade)
    -- I should write Byron 0.1 for the destructuring alone
    local seed, tape, trait, quality, vector = clade.seed,
@@ -270,41 +277,71 @@ function Clade.coalesce(clade)
                                               clade.quality,
                                               clade.vector
    -- apply qualia
+   local anomalies, anom_Q, anom_T, anom_V = {}, {}, {}, {}
+
    for Q, set in pairs(quality) do
       for tag in pairs(set) do
          if not seed[tag] then
-            return nil, "Clade has no phyle " .. tag .. " for quality " .. Q
+            anomalies.quality = anom_Q
+            anom_Q[Q] = anom_Q[Q] or {}
+            anom_Q[Q][tag] = "Clade has no phyle " .. tag
+                          .. " for quality " .. Q
          end
-         tape[elem][Q] = true
+         tape[tag][Q] = true
       end
    end
+
    -- traits with collision detection
    for T, impl in pairs(trait) do
       local qual = quality[T]
       if not qual then
-         return nil, "Trait " .. T .. " has no corresponding quality"
-      end
-      -- these are canonically message and method but we don't actually care
-      for message, method in pairs(impl) do
-         for tag in pairs(qual) do
-            local phyle = tape[tag]
-            -- handle collisions here
-            tape[tag][message] = method
-         end
-      end
-      for message, impl in pairs(vector) do
-         for tag, method in pairs(impl) do
-            if not seed[tag] then
-               return nil, "No phyle " .. tag .. " for vector " .. message
+         anomalies.trait = anom_T
+         anom_T[qual] = "Trait " .. T .. " has no corresponding quality "
+                        .. qual
+      else
+         -- these are canonically message and method
+         for message, method in pairs(impl) do
+            for tag in pairs(qual) do
+               local phyle = tape[tag]
+               -- handle collisions here
+               tape[tag][message] = method
             end
-            -- collisions here are okay but we should notice it
-            tape[tag][message] = method
          end
       end
    end
 
+   -- vector application last
+   for message, impl in pairs(vector) do
+      for tag, method in pairs(impl) do
+         if not seed[tag] then
+            anomalies.vector = anom_V
+            anom_V[message] = anom_V[message] or {}
+            anom_V[message][tag] = "No phyle " .. tag
+                                .. " for vector " .. message
+         else
+            -- collisions here are okay but we make note of it
+            if tape[tag][message] then
+               anom_V[message] = anom_V[message] or {}
+               anom_V[message][tape] = "(at least one) duplicate method"
+            end
+            tape[tag][message] = method
+         end
+      end
+   end
+   if table.nkeys(anomalies) > 0 then
+      clade.anomalies = anomalies
+   end
+
    return clade
 end
+
+
+
+
+
+
+
+
 
 
 

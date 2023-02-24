@@ -299,6 +299,24 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 local assert = assert
 local require = assert(require)
 local error   = assert(error)
@@ -665,6 +683,28 @@ local function genus(order, contract)
 end
 
 cluster.genus = genus
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1154,9 +1194,9 @@ local function super(tape, message, after_method)
                     .. tape .. " isn't callable, type is "
                     .. type(super_method)
    end
-   tape[message] = function(_tape, ...)
-                      super_method(_tape, ...)
-                      return after_method(_tape, ...)
+   tape[message] = function(_subject, ...)
+                      super_method(_subject, ...)
+                      return after_method(_subject, ...)
                    end
    return true
 end

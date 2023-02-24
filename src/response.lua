@@ -215,7 +215,7 @@ local resume = assert(coroutine.resume)
 
 function Response.respond(response, ...)
    response.pending = false
-   local thread = response.autothread or autothread
+   local thread = response.blue or response.autothread or autothread
    response:pack(...)
    if response.work == response.co then
       return resume(response.co, ...)

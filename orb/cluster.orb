@@ -69,7 +69,7 @@ leaky, however, in the sense that the error caused by the return value being
 =nil= will travel away from the error, losing the error itself in the process.
 
 We mitigate this by providing a strict mode for development purposes, which
-raises the return value into an assertion.
+raises the return value into an assertion. #Todo #NYI
 
 The purpose of Cluster is to construct subjects.  Subjects are a type of
 object, but are not an object /per se/.
@@ -111,9 +111,9 @@ Cluster's vocabulary originates for the most part with biology.
 Clustering related behaviors into categories is unavoidably taxonomic.
 Fortunately, we don't have reality to contend with, so this approach is not
 fated to the same doom which has befallen the Linnean tradition.  If we say
-a Panda is a sort of Racoon, we might change our mind and say it is in fact
+a Panda is a sort of Raccoon, we might change our mind and say it is in fact
 a Bear.  In stark contract with biology, it is our saying so which makes it
-the case.  If our Rougelike calls for the Quacking Panda Duck-Bear, so be it.
+the case.  If our Roguelike calls for the Quacking Panda Duck-Bear, so be it.
 
 Rather than fall into the taxonomic fallacy, providing levels and sublevels
 which organize thought rather than reality, we have the concepts of order,
@@ -124,8 +124,9 @@ all other Objects.  Cluster does not wrong this right.  Our basis for the
 protocol is an order, and each is /sui generis/.
 
 An order is always a basis, which may be instantiated, and may also be
-extended via =cluster.genus=.  A genre with no further specializations is a
-species; a genus has both generic and specific partners.
+extended via =cluster.genus=.  All subsequent extensions are a genus, that
+is, genera.  Both order and genus are genres, and we speak of genres as being
+a basis of, generic to, and specific from, one another.
 
 An instance of a given genre we refer to as a subject, or instance, but never
 as an object, except when this generalization is appropriate.
@@ -177,6 +178,23 @@ and we may promote it to an error and not tell you.
 Provided the contract is applied successfully, =genus= and =order= will each
 return three values.  This tripartite arrangement of objects defines the
 genre.
+
+
+**** #Next Storing the Contract
+
+The obvious place is just =__meta.contract=.  I have no good argument against
+the obvious.
+
+The table the users passes for the Contract, must remain the Contract, so
+specialization will need to apply the generic Contract or Contracts to the
+supplied table.
+
+
+***** Cluster:contract module
+
+Useful code, probably in the wrong namespace.
+
+Hence the cluster house style of no localizations until further notice.
 
 
 *** Seed, Tape, Meta
@@ -599,7 +617,7 @@ Why genus?  The various terms of Linnean taxonomy have unwanted connotations,
 class very much included.  Genus fits nicely.
 
 It's also a reminder that we are using the techniques of prototyping and the
-metaobject protocol, where class is used extensively in the sense of
+metaobject protocol, whereas class is used extensively in the sense of
 classification.  Cluster is protocol, not ontology.
 
 Last, it's a reminder that applying it repeatedly gives /generic/ results.
@@ -748,6 +766,28 @@ it in a meaningful way.
 
 A free index renders the Tape vestigial, but we still make one. Letting the
 Tape be something which throws an error when we index it would be masochistic.
+
+
+****** A Third, More Complex Thing
+
+The =boundindex= assumes that we need to close over state, but have a single
+metatable.  It's at least as common for us to want to close over parameters
+provided during construction, and this requires creating a distinctive
+endowment for each subject.
+
+We want that anyway, as simple as "put a metatable on it" might be, it's
+essential to reviving database and serialized subjects, where we can make the
+endowments into fenv globals and call them on the literal table constructors.
+
+
+***** Extending and Replacing the Library
+
+The seed, by convention, has the tape as its index.
+
+There are occasions when we want to provide additional functions, canonically
+the building blocks of more complex methods where extensions might need to
+use them in lieu of a simple super call.
+
 
 
 **** applycontract(genre, contract)
@@ -1154,9 +1194,9 @@ local function super(tape, message, after_method)
                     .. tape .. " isn't callable, type is "
                     .. type(super_method)
    end
-   tape[message] = function(_tape, ...)
-                      super_method(_tape, ...)
-                      return after_method(_tape, ...)
+   tape[message] = function(_subject, ...)
+                      super_method(_subject, ...)
+                      return after_method(_subject, ...)
                    end
    return true
 end
