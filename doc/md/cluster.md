@@ -594,6 +594,7 @@ local function order(contract)
          -- tape -> err
          return seed, tape
       end
+      meta.__meta.contract = contract
    else
       seed, tape = {}, {}
       meta = newmeta(seed)
@@ -935,9 +936,9 @@ table/metatable relationships, and even if it didn't, assigning an
 intermediate metatable which is never used is sloppy engineering\.
 
 The seed and the metatable have the same index\[\{†\}\], so it's possible to use
-values from the tape during building, whether that's a good idea or not
-\(and it can be, as a way to design a more\-generic builder which dispatches on
-qualities of genera which may not be known\)\.
+values from the tape during building, whether that's a good idea or notand it can be, as a way to design a more\-generic builder which dispatches on
+qualities
+\( of genera which may not be known\)\.
 
 \{†\}:  When the seed is a table\.  When it isn't, it's not in the signature\.
 

@@ -594,6 +594,7 @@ local function order(contract)
          -- tape -> err
          return seed, tape
       end
+      meta.__meta.contract = contract
    else
       seed, tape = {}, {}
       meta = newmeta(seed)
