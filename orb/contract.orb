@@ -1,1 +1,37 @@
 * Cluster Contract
+
+
+The system for specification of Cluster genres.
+
+
+** Rationale
+
+Cluster is a Metaobject Protocol, and to achieve that goal, must be driven
+declaratively.
+
+The Contract is the mechanism for this.
+
+We build out this module, then use it to specify all the default behaviors for
+Cluster, such that creating an order or genre without a specified contract
+follows the default contract.
+
+If a Contract is provided, this is /reconciled/ with the default contract, or
+with the existing contract for the genre we're specifying on the basis of.
+
+
+*** Surface Area
+
+A contract should be an open book, a table which may be read arbitrarily, thus
+devoid of methods.
+
+This is fine, cluster is the consumer of contracts, anything we need to do to
+them can be done there.
+
+The main operation we need here is a non-Abelian =A + B=, which produces a new
+Contract iff =B= is compatible with =A=.
+
+Open ::question/bridge::, do we want Contracts to function through, or to
+compose at the moment of construction?  I would assume the latter as the
+default, the desire to allow root changes to propagate through running systems
+is seductive but leaves the code with that sort of Queen Mab feyness which we
+don't really need to encourage.

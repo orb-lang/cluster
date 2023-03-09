@@ -205,6 +205,8 @@ end
 
 *** Clade()
 
+#Todo integrate with the reified contract system
+
 #!lua
 local prepose = assert(fn.prepose)
 
@@ -224,6 +226,37 @@ cluster.construct(new, function(new, clade, seed, contract)
 
    return clade
 end)
+#/lua
+
+
+*** Clade:applyVector(Vec)
+
+Applies the Vector by copying the subtables to avoid sharing structure.
+
+An anticipated pattern with a Vector involves some massaging the phyle names
+before coalescence.
+
+#!lua
+local clone = assert(table.cloneinstance)
+
+function Clade.applyVector(clade, Vec)
+   assert(type(Vec) == 'table', 'the applied Vector must be a table')
+
+   for message, impl in pairs(Vec) do
+      if type(impl) ~= 'table' then
+         return nil, 'the values of the Vector table must be tables'
+      end
+      if clade.vector[message] then
+         return nil, 'clade already has a vector ' .. message
+      end
+   end
+
+   for message, impl in pairs(Vec) do
+      clade.vector[message] = clone(impl)
+   end
+
+   return clade
+end
 #/lua
 
 
@@ -331,6 +364,8 @@ function Clade.coalesce(clade)
    end
    if table.nkeys(anomalies) > 0 then
       clade.anomalies = anomalies
+   else
+      clade.anomalies = nil
    end
 
    return clade
@@ -370,6 +405,8 @@ and build new ones.
 Unanswered question is how coalescence works with extension.  We won't
 coalesce the Clade itself, but we might coalesce a copy, and rebase the clade
 on that copy.
+
+#Todo after the Contract, work out the extension of phyles in parallel.
 
 #!lua
 function Clade.extend(clade, contract)

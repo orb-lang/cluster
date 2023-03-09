@@ -206,6 +206,8 @@ end
 
 
 
+
+
 local prepose = assert(fn.prepose)
 
 cluster.construct(new, function(new, clade, seed, contract)
@@ -224,6 +226,37 @@ cluster.construct(new, function(new, clade, seed, contract)
 
    return clade
 end)
+
+
+
+
+
+
+
+
+
+
+
+local clone = assert(table.cloneinstance)
+
+function Clade.applyVector(clade, Vec)
+   assert(type(Vec) == 'table', 'the applied Vector must be a table')
+
+   for message, impl in pairs(Vec) do
+      if type(impl) ~= 'table' then
+         return nil, 'the values of the Vector table must be tables'
+      end
+      if clade.vector[message] then
+         return nil, 'clade already has a vector ' .. message
+      end
+   end
+
+   for message, impl in pairs(Vec) do
+      clade.vector[message] = clone(impl)
+   end
+
+   return clade
+end
 
 
 
@@ -331,10 +364,14 @@ function Clade.coalesce(clade)
    end
    if table.nkeys(anomalies) > 0 then
       clade.anomalies = anomalies
+   else
+      clade.anomalies = nil
    end
 
    return clade
 end
+
+
 
 
 
