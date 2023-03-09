@@ -459,8 +459,6 @@ cluster.metafor = assert(cab.metafor)
 
 
 
-
-
 local function idest(pred, obj)
    if not obj then return false end
    -- primitive
@@ -477,7 +475,7 @@ local function idest(pred, obj)
             return true
          end
       elseif obj.idEst == pred then
-         return true
+         return true -- , "deprecated"
       elseif _M and is_meta[_M] then
          -- even internal errors should not be raised but
          return assert(nil, "Cluster metatable missing identities on __sunt")
@@ -492,6 +490,9 @@ local function idest(pred, obj)
 end
 
 cluster.idest = idest
+
+
+
 
 
 
@@ -633,25 +634,30 @@ local function genus(order, contract)
    if not order then
       return nil, "genus must be called on an existing genre/order"
    end
-
    local meta_tape = seed_tape[order]
    if not meta_tape then
        return nil, "#1 is not a seed"
    end
    local _M = seed_meta[order]
    if not _M then
-       return nil, "no meta for generic party"
+      return nil, "no meta for generic party"
    end
    local seed, tape, meta;
+
+
+   -- we need to apply, not just override, the contract here:
+   --contract = contract or _M.__meta.contract
+
    if contract then
-       seed, tape, meta = applycontract(order, contract)
-       if not seed then
+      seed, tape, meta = applycontract(order, contract)
+      if not seed then
          -- tape -> err
          return seed, tape
-       end
-       if not getmeta(tape) then
-          setmeta(tape, { __index = meta_tape })
-       end
+      end
+      if not getmeta(tape) then
+         setmeta(tape, { __index = meta_tape })
+      end
+      meta.__meta.contract = contract
    else
        seed, tape = {}, {}
        meta = newmeta(seed)

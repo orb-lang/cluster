@@ -186,16 +186,17 @@ The tape automatically produces genera when indexed upon, which we distribute
 across the three collections.  This returns the tape of the phyle.
 
 #!lua
-local function specializer(cfg)
+local function specializer(contract)
    return function(tape, field)
       if type(field) ~= 'string' then return nil end
 
       local clade = _clade[tape]
       local seed = assert(clade.seed[1], "clade is missing basis seed")
-      local new, Phyle, Phyle_M = assert(cluster.genus(seed, cfg))
+      local new, Phyle, Phyle_M = assert(cluster.genus(seed, contract))
       clade.seed[field] = new
       clade.tape[field] = Phyle
       clade.meta[field] =  Phyle_M
+
       return Phyle
    end
 end
@@ -206,17 +207,17 @@ end
 
 #!lua
 local prepose = assert(fn.prepose)
-local CFG_DUMMY = {}
 
-cluster.construct(new, function(new, clade, seed, cfg)
-   cfg = cfg or CFG_DUMMY
+cluster.construct(new, function(new, clade, seed, contract)
+   contract = contract or {}
    local tape, meta = cluster.tapefor(seed), cluster.metafor(seed)
-   local __index = cfg.postindex
-                   and prepose(specializer(cfg), cfg.postindex)
-                   or specializer(cfg)
+   local __index = contract.postindex
+                   and prepose(specializer(contract), contract.postindex)
+                   or specializer(contract)
    clade.tape = setmetatable({tape}, { __index = __index })
 
    -- memoize just what we use, right now, that's the tape, only
+   -- open question: is the below even useful?
    _clade[clade.tape] = clade
    clade.seed, clade.meta = {seed}, {meta}
    clade.quality, clade.trait, clade.vector = {}, {}, {}

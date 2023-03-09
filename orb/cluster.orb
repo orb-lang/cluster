@@ -1,4 +1,4 @@
-* Cluster
+ * Cluster
 
 
   *The Comprehensive LUa System for Typing Everything Repeatedly*.
@@ -255,7 +255,7 @@ things in the constructor which are given different meanings by the metatable.
 So a completely blank canvas has these relations:
 
 #!lua #noKnit
-local Seed, Tape, Meta = setmetatable({}, {}), {}, {__meta = {}}
+local Seed, Tape, Meta = setmetatable({}, {}), {}, { __meta = {} }
 
 getmetatable(Seed).__index = Tape
 
@@ -452,8 +452,6 @@ serves as the identity.
 In Latin, /sunt/ is the third-person, plural, present, active, indicative,
 form of to be, as in /cogito ergo/.  Ergo, sunt.
 
-
-
 We put this on the metatable, and not the meta-metatable, for a few reasons.
 Cluster should be able to re-derive =sunt= from inspection of =__meta=, and
 conversely we want to abide by the results of =sunt[pred]= no matter where the
@@ -477,7 +475,7 @@ local function idest(pred, obj)
             return true
          end
       elseif obj.idEst == pred then
-         return true
+         return true -- , "deprecated"
       elseif _M and is_meta[_M] then
          -- even internal errors should not be raised but
          return assert(nil, "Cluster metatable missing identities on __sunt")
@@ -493,6 +491,9 @@ end
 
 cluster.idest = idest
 #/lua
+
+
+****** (latent code) globalize 'idest'
 
 This will put idest in the global, which we're not doing now.
 
@@ -633,25 +634,30 @@ local function genus(order, contract)
    if not order then
       return nil, "genus must be called on an existing genre/order"
    end
-
    local meta_tape = seed_tape[order]
    if not meta_tape then
        return nil, "#1 is not a seed"
    end
    local _M = seed_meta[order]
    if not _M then
-       return nil, "no meta for generic party"
+      return nil, "no meta for generic party"
    end
    local seed, tape, meta;
+
+
+   -- we need to apply, not just override, the contract here:
+   --contract = contract or _M.__meta.contract
+
    if contract then
-       seed, tape, meta = applycontract(order, contract)
-       if not seed then
+      seed, tape, meta = applycontract(order, contract)
+      if not seed then
          -- tape -> err
          return seed, tape
-       end
-       if not getmeta(tape) then
-          setmeta(tape, { __index = meta_tape })
-       end
+      end
+      if not getmeta(tape) then
+         setmeta(tape, { __index = meta_tape })
+      end
+      meta.__meta.contract = contract
    else
        seed, tape = {}, {}
        meta = newmeta(seed)
