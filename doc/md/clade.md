@@ -193,7 +193,7 @@ local function specializer(contract)
       local clade = _clade[tape]
       local seed = assert(clade.seed[1], "clade is missing basis seed")
       local new, Phyle, Phyle_M = assert(cluster.genus(seed, contract))
-      clade.seed[field] = new
+      clade.seed[field] = clade.seed[field] or new
       clade.tape[field] = Phyle
       clade.meta[field] =  Phyle_M
 
@@ -254,6 +254,38 @@ function Clade.applyVector(clade, Vec)
    for message, impl in pairs(Vec) do
       clade.vector[message] = clone(impl)
    end
+
+   return clade
+end
+```
+
+
+### Clade:replaceSeed\(phyle :s, seed\_fn :fn\)
+
+  This replaces a seed function of `phyle` with the given seed function,
+wrapped to add the metatable\.
+
+`no_wrap` overrides this behavior, for a seed which already applies a
+metatable, or which already has one\.
+
+```lua
+function Clade.replaceSeed(clade, phyle, seed_fn, no_wrap)
+
+   assert(type('phyle') == 'string', "Phyle must be a string")
+
+   if not clade.seed[phyle] then
+      error("A seed named " .. phyle .. " does not already exist")
+   end
+
+   if no_wrap then
+      clade.seed[phyle] = seed_fn
+      return clade
+   end
+
+   local metaOf = clade.meta[phyle]
+   clade.seed[phyle] = function(...)
+                          return setmetatable(metaOf, seed_fn(...))
+                       end
 
    return clade
 end

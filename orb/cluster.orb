@@ -1,4 +1,4 @@
- * Cluster
+* Cluster
 
 
   *The Comprehensive LUa System for Typing Everything Repeatedly*.
@@ -582,6 +582,15 @@ built by the contract is wrong, we must detect this during application.
 
 Signature is =(order, seed, tape, meta)=, which returns =true= for
 consistency.
+
+- [0/3]  Contract:  [#Todo]
+
+  - [ ]  Refactor =order= with contract module
+
+  - [ ]  Refactor =genus= ibid.
+
+  - [ ]  Redesign the cluster library interface in light of a year's
+         developments.
 
 #!lua
 local applycontract, nameFor;
