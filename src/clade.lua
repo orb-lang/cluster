@@ -268,14 +268,14 @@ end
 
 
 
-function Clade.clonePhyleFrom(clade, phyle, clone)
+function Clade.clonePhyleFrom(clade, phyle, synonym)
    assert(type(phyle) == 'string', 'phyle must be a string')
-   assert(type(clone) == 'string', 'clone must be a string')
+   assert(type(synonym) == 'string', 'synonym must be a string')
    if clade.tape[phyle] then -- observer
    end
-   clade.seed[clone] = clade.seed[phyle]
-   clade.meta[clone] = clade.meta[phyle]
-   clade.tape[clone] = clade.tape[phyle]
+   clade.seed[synonym] = clade.seed[phyle]
+   clade.meta[synonym] = clade.meta[phyle]
+   clade.tape[synonym] = clade.tape[phyle]
 
    return clade
 end
