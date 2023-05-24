@@ -268,10 +268,32 @@ end
 
 
 
+function Clade.clonePhyleFrom(clade, phyle, clone)
+   assert(type(phyle) == 'string', 'phyle must be a string')
+   assert(type(clone) == 'string', 'clone must be a string')
+   if clade.tape[phyle] then -- observer
+   end
+   clade.seed[clone] = clade.seed[phyle]
+   clade.meta[clone] = clade.meta[phyle]
+   clade.tape[clone] = clade.tape[phyle]
+
+   return clade
+end
+
+
+
+
+
+
+
+
+
+
+
 
 function Clade.replaceSeed(clade, phyle, seed_fn, no_wrap)
 
-   assert(type('phyle') == 'string', "Phyle must be a string")
+   assert(type(phyle) == 'string', "Phyle must be a string")
 
    if not clade.seed[phyle] then
       error("A seed named " .. phyle .. " does not already exist")

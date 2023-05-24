@@ -260,6 +260,28 @@ end
 #/lua
 
 
+*** Clade:clonePhyleFrom(phyle, clone)
+
+Makes the =clone= tagged phyle equivalent to the =phyle= tagged one.
+
+Some grammars are more useful if rules can be collapsed into one synonym,
+which this method empowers.
+
+#!lua
+function Clade.clonePhyleFrom(clade, phyle, clone)
+   assert(type(phyle) == 'string', 'phyle must be a string')
+   assert(type(clone) == 'string', 'clone must be a string')
+   if clade.tape[phyle] then -- observer
+   end
+   clade.seed[clone] = clade.seed[phyle]
+   clade.meta[clone] = clade.meta[phyle]
+   clade.tape[clone] = clade.tape[phyle]
+
+   return clade
+end
+#/lua
+
+
 *** Clade:replaceSeed(phyle :s, seed_fn :fn)
 
   This replaces a seed function of =phyle= with the given seed function,
@@ -271,7 +293,7 @@ metatable, or which already has one.
 #!lua
 function Clade.replaceSeed(clade, phyle, seed_fn, no_wrap)
 
-   assert(type('phyle') == 'string', "Phyle must be a string")
+   assert(type(phyle) == 'string', "Phyle must be a string")
 
    if not clade.seed[phyle] then
       error("A seed named " .. phyle .. " does not already exist")
